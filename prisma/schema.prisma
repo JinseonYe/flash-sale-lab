@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +5,58 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum OrderStatus {
+  COMPLETED
+  CANCELLED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  orders Order[]
+
+  @@map("users")
+}
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  name      String
+  price     Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  inventory Inventory?
+  orders    Order[]
+
+  @@map("products")
+}
+
+model Inventory {
+  id        Int      @id @default(autoincrement())
+  productId Int      @unique @map("product_id")
+  stock     Int
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("inventories")
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  userId    Int         @map("user_id")
+  productId Int         @map("product_id")
+  quantity  Int
+  status    OrderStatus @default(COMPLETED)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([userId])
+  @@index([productId])
+  @@map("orders")
 }
