@@ -45,7 +45,7 @@ describe('OrderService', () => {
       expect(inventoryRepository.findByProductId).toHaveBeenCalledWith(1);
     });
 
-    it('재고가 주문 수량보다 부족하면 주문이 실패해야 한다', async () => {
+    it('재고가 부족하면 주문이 실패해야 한다', async () => {
       // Arrange
       const inventoryRepository = {
         findByProductId: jest.fn().mockResolvedValue({
@@ -71,7 +71,10 @@ describe('OrderService', () => {
           productId: 1,
           quantity: 2,
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow('재고가 부족합니다.');
+
+      expect(inventoryRepository.decrease).not.toHaveBeenCalled();
+      expect(orderRepository.create).not.toHaveBeenCalled();
     });
   });
 });
