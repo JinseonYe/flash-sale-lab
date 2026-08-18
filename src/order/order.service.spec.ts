@@ -76,5 +76,48 @@ describe('OrderService', () => {
       expect(inventoryRepository.decrease).not.toHaveBeenCalled();
       expect(orderRepository.create).not.toHaveBeenCalled();
     });
+
+    it('재고와 주문 수량이 같으면 주문이 성공해야 한다', async () => {
+      // Arrange
+      const inventoryRepository = {
+        findByProductId: jest.fn().mockResolvedValue({
+          productId: 1,
+          stock: 2,
+        }),
+        decrease: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const orderRepository = {
+        create: jest.fn().mockResolvedValue({
+          id: 1,
+          userId: 1,
+          productId: 1,
+          quantity: 2,
+        }),
+      };
+
+      const orderService = new OrderService(
+        inventoryRepository,
+        orderRepository,
+      );
+
+      // Act
+      const order = await orderService.create({
+        userId: 1,
+        productId: 1,
+        quantity: 2,
+      });
+
+      // Assert
+      expect(inventoryRepository.decrease).toHaveBeenCalledWith(1, 2);
+      expect(orderRepository.create).toHaveBeenCalled();
+      expect(order).toEqual(
+        expect.objectContaining({
+          userId: 1,
+          productId: 1,
+          quantity: 2,
+        }),
+      );
+    });
   });
 });
