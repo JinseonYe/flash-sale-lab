@@ -15,4 +15,6 @@ export interface Order {
 
 export interface OrderRepository {
   create(input: CreateOrderInput): Promise<Order>;
+
+  findById(id: number): Promise<Order | null>;
 }

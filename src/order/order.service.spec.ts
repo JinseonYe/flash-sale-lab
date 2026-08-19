@@ -19,6 +19,7 @@ describe('OrderService', () => {
           productId: 1,
           quantity: 2,
         }),
+        findById: jest.fn(),
       };
 
       const orderService = new OrderService(
@@ -57,6 +58,7 @@ describe('OrderService', () => {
 
       const orderRepository = {
         create: jest.fn(),
+        findById: jest.fn(),
       };
 
       const orderService = new OrderService(
@@ -94,6 +96,7 @@ describe('OrderService', () => {
           productId: 1,
           quantity: 2,
         }),
+        findById: jest.fn(),
       };
 
       const orderService = new OrderService(

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { INVENTORY_REPOSITORY } from './repository/inventory.repository';
 import type { InventoryRepository } from './repository/inventory.repository';
 
@@ -30,5 +30,15 @@ export class OrderService {
     await this.inventoryRepository.decrease(input.productId, input.quantity);
 
     return this.orderRepository.create(input);
+  }
+
+  async findById(id: number) {
+    const order = await this.orderRepository.findById(id);
+
+    if (!order) {
+      throw new NotFoundException('주문을 찾을 수 없습니다.');
+    }
+
+    return order;
   }
 }

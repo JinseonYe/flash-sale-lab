@@ -1,15 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
+import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import type { App } from 'supertest/types';
-import { PrismaPg } from '@prisma/adapter-pg';
 
 import { AppModule } from '../src/app.module';
-import { PrismaClient } from '../generated/prisma/client';
+import { PrismaService } from '../src/prisma/prisma.service';
 
 describe('Order E2E', () => {
   let app: INestApplication<App>;
-  let prisma: PrismaClient;
+  let prisma: PrismaService;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -17,13 +17,18 @@ describe('Order E2E', () => {
     }).compile();
 
     app = moduleFixture.createNestApplication();
+
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
+
     await app.init();
 
-    const adapter = new PrismaPg({
-      connectionString: process.env.DATABASE_URL,
-    });
-
-    prisma = new PrismaClient({ adapter });
+    prisma = app.get(PrismaService);
   });
 
   beforeEach(async () => {
@@ -52,7 +57,6 @@ describe('Order E2E', () => {
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
     await app.close();
   });
 
@@ -108,5 +112,16 @@ describe('Order E2E', () => {
         quantity: 2,
       }),
     );
+  });
+
+  it('POST /orders - 주문 수량이 0 이하면 400을 반환해야 한다', async () => {
+    await request(app.getHttpServer())
+      .post('/orders')
+      .send({
+        userId: 1,
+        productId: 1,
+        quantity: 0,
+      })
+      .expect(400);
   });
 });

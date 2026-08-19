@@ -6,7 +6,7 @@ import type { InventoryRepository } from './inventory.repository';
 export class PrismaInventoryRepository implements InventoryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findByProductId(productId: number) {
+  findByProductId(productId: number) {
     return this.prisma.inventory.findUnique({
       where: {
         productId,

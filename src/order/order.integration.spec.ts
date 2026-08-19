@@ -1,19 +1,14 @@
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../../generated/prisma/client';
 import { OrderService } from './order.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { PrismaInventoryRepository } from './repository/prisma-inventory.repository';
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
 
 describe('OrderService Integration', () => {
-  let prisma: PrismaClient;
+  let prisma: PrismaService;
   let orderService: OrderService;
 
   beforeAll(() => {
-    const adapter = new PrismaPg({
-      connectionString: process.env.DATABASE_URL,
-    });
-
-    prisma = new PrismaClient({ adapter });
+    prisma = new PrismaService();
 
     const inventoryRepository = new PrismaInventoryRepository(prisma);
     const orderRepository = new PrismaOrderRepository(prisma);
@@ -22,20 +17,17 @@ describe('OrderService Integration', () => {
   });
 
   beforeEach(async () => {
-    // 이전 테스트 데이터 제거
     await prisma.order.deleteMany();
     await prisma.inventory.deleteMany();
     await prisma.product.deleteMany();
     await prisma.user.deleteMany();
 
-    // 테스트 User 생성
     await prisma.user.create({
       data: {
         email: 'test@example.com',
       },
     });
 
-    // 테스트 Product + Inventory 생성
     await prisma.product.create({
       data: {
         name: 'Flash Sale Product',
@@ -50,7 +42,7 @@ describe('OrderService Integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.$disconnect();
+    await prisma.onModuleDestroy();
   });
 
   it('실제 DB에서 주문 생성 시 재고가 감소하고 주문이 저장되어야 한다', async () => {
