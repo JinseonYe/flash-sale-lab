@@ -1,3 +1,5 @@
+export const ORDER_REPOSITORY = Symbol('ORDER_REPOSITORY');
+
 export interface CreateOrderInput {
   userId: number;
   productId: number;

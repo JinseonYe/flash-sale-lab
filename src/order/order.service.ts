@@ -1,12 +1,20 @@
-import { InventoryRepository } from './repository/inventory.repository';
-import {
+import { Inject, Injectable } from '@nestjs/common';
+import { INVENTORY_REPOSITORY } from './repository/inventory.repository';
+import type { InventoryRepository } from './repository/inventory.repository';
+
+import { ORDER_REPOSITORY } from './repository/order.repository';
+import type {
   CreateOrderInput,
   OrderRepository,
 } from './repository/order.repository';
 
+@Injectable()
 export class OrderService {
   constructor(
+    @Inject(INVENTORY_REPOSITORY)
     private readonly inventoryRepository: InventoryRepository,
+
+    @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
   ) {}
 
@@ -15,7 +23,7 @@ export class OrderService {
       input.productId,
     );
 
-    if (inventory.stock < input.quantity) {
+    if (!inventory || inventory.stock < input.quantity) {
       throw new Error('재고가 부족합니다.');
     }
 
