@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { INVENTORY_REPOSITORY } from './repository/inventory.repository';
 import type { InventoryRepository } from './repository/inventory.repository';
 
@@ -24,7 +29,7 @@ export class OrderService {
     );
 
     if (!inventory || inventory.stock < input.quantity) {
-      throw new Error('재고가 부족합니다.');
+      throw new ConflictException('재고가 부족합니다.');
     }
 
     await this.inventoryRepository.decrease(input.productId, input.quantity);

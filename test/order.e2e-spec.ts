@@ -124,4 +124,23 @@ describe('Order E2E', () => {
       })
       .expect(400);
   });
+
+  it('POST /orders - 재고보다 많은 수량을 주문하면 409를 반환해야 한다', async () => {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { email: 'e2e@example.com' },
+    });
+
+    const product = await prisma.product.findFirstOrThrow({
+      where: { name: 'Flash Sale Product' },
+    });
+
+    await request(app.getHttpServer())
+      .post('/orders')
+      .send({
+        userId: user.id,
+        productId: product.id,
+        quantity: 11,
+      })
+      .expect(409);
+  });
 });
