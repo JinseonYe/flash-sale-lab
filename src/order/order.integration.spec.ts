@@ -1,7 +1,7 @@
 import { OrderService } from './order.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PrismaInventoryRepository } from './repository/prisma-inventory.repository';
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
+import { PrismaOrderUnitOfWork } from './transaction/prisma-order-unit-of-work';
 
 describe('OrderService Integration', () => {
   let prisma: PrismaService;
@@ -10,35 +10,10 @@ describe('OrderService Integration', () => {
   beforeAll(() => {
     prisma = new PrismaService();
 
-    const inventoryRepository = new PrismaInventoryRepository(prisma);
     const orderRepository = new PrismaOrderRepository(prisma);
+    const unitOfWork = new PrismaOrderUnitOfWork(prisma);
 
-    orderService = new OrderService(inventoryRepository, orderRepository);
-  });
-
-  beforeEach(async () => {
-    await prisma.order.deleteMany();
-    await prisma.inventory.deleteMany();
-    await prisma.product.deleteMany();
-    await prisma.user.deleteMany();
-
-    await prisma.user.create({
-      data: {
-        email: 'test@example.com',
-      },
-    });
-
-    await prisma.product.create({
-      data: {
-        name: 'Flash Sale Product',
-        price: 10000,
-        inventory: {
-          create: {
-            stock: 10,
-          },
-        },
-      },
-    });
+    orderService = new OrderService(orderRepository, unitOfWork);
   });
 
   afterAll(async () => {

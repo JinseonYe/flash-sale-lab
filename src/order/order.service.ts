@@ -1,62 +1,44 @@
 import {
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
-  ConflictException,
 } from '@nestjs/common';
-import { INVENTORY_REPOSITORY } from './repository/inventory.repository';
-import type { InventoryRepository } from './repository/inventory.repository';
+
 import { ORDER_REPOSITORY } from './repository/order.repository';
 import type {
   CreateOrderInput,
   OrderRepository,
 } from './repository/order.repository';
-import { PrismaService } from '../prisma/prisma.service';
+
+import { ORDER_UNIT_OF_WORK } from './transaction/order-unit-of-work';
+import type { OrderUnitOfWork } from './transaction/order-unit-of-work';
 
 @Injectable()
 export class OrderService {
   constructor(
-    @Inject(INVENTORY_REPOSITORY)
-    private readonly inventoryRepository: InventoryRepository,
-
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
 
-    private readonly prisma: PrismaService,
+    @Inject(ORDER_UNIT_OF_WORK)
+    private readonly unitOfWork: OrderUnitOfWork,
   ) {}
 
   create(input: CreateOrderInput) {
-    return this.createInTransaction(input);
-  }
+    return this.unitOfWork.execute(
+      async ({ inventoryRepository, orderRepository }) => {
+        const decreased = await inventoryRepository.decreaseIfAvailable(
+          input.productId,
+          input.quantity,
+        );
 
-  private createInTransaction(input: CreateOrderInput) {
-    return this.prisma.$transaction(async (tx) => {
-      const result = await tx.inventory.updateMany({
-        where: {
-          productId: input.productId,
-          stock: {
-            gte: input.quantity,
-          },
-        },
-        data: {
-          stock: {
-            decrement: input.quantity,
-          },
-        },
-      });
+        if (!decreased) {
+          throw new ConflictException('재고가 부족합니다.');
+        }
 
-      if (result.count === 0) {
-        throw new ConflictException('재고가 부족합니다.');
-      }
-
-      return tx.order.create({
-        data: {
-          userId: input.userId,
-          productId: input.productId,
-          quantity: input.quantity,
-        },
-      });
-    });
+        return orderRepository.create(input);
+      },
+    );
   }
 
   async findById(id: number) {

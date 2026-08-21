@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { InventoryRepository } from './inventory.repository';
 
+type InventoryClient = Pick<PrismaService, 'inventory'>;
+
 @Injectable()
 export class PrismaInventoryRepository implements InventoryRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: InventoryClient,
+  ) {}
 
   findByProductId(productId: number) {
     return this.prisma.inventory.findUnique({
@@ -14,10 +19,16 @@ export class PrismaInventoryRepository implements InventoryRepository {
     });
   }
 
-  async decrease(productId: number, quantity: number) {
-    await this.prisma.inventory.update({
+  async decreaseIfAvailable(
+    productId: number,
+    quantity: number,
+  ): Promise<boolean> {
+    const result = await this.prisma.inventory.updateMany({
       where: {
         productId,
+        stock: {
+          gte: quantity,
+        },
       },
       data: {
         stock: {
@@ -25,5 +36,7 @@ export class PrismaInventoryRepository implements InventoryRepository {
         },
       },
     });
+
+    return result.count === 1;
   }
 }

@@ -6,5 +6,5 @@ export interface InventoryRepository {
     stock: number;
   } | null>;
 
-  decrease(productId: number, quantity: number): Promise<void>;
+  decreaseIfAvailable(productId: number, quantity: number): Promise<boolean>;
 }

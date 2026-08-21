@@ -1,6 +1,6 @@
 import { OrderService } from './order.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PrismaInventoryRepository } from './repository/prisma-inventory.repository';
+import { PrismaOrderUnitOfWork } from './transaction/prisma-order-unit-of-work';
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
 
 describe('Order concurrency', () => {
@@ -14,21 +14,17 @@ describe('Order concurrency', () => {
   beforeAll(() => {
     prisma = new PrismaService();
 
-    const inventoryRepository = new PrismaInventoryRepository(prisma);
     const orderRepository = new PrismaOrderRepository(prisma);
+    const unitOfWork = new PrismaOrderUnitOfWork(prisma);
 
-    orderService = new OrderService(
-      inventoryRepository,
-      orderRepository,
-      prisma,
-    );
+    orderService = new OrderService(orderRepository, unitOfWork);
   });
 
   afterAll(async () => {
     await prisma.onModuleDestroy();
   });
 
-  it('동시 주문 시 재고 정합성 상태를 확인한다', async () => {
+  it('동시 주문 시 재고 정합성을 보장한다', async () => {
     const user = await prisma.user.findUniqueOrThrow({
       where: {
         email: 'seed@example.com',
@@ -49,6 +45,8 @@ describe('Order concurrency', () => {
     }
 
     const initialStock = product.inventory.stock;
+
+    expect(initialStock).toBe(INITIAL_STOCK);
 
     const orderPromises = Array.from({ length: CONCURRENT_ORDERS }, () =>
       orderService.create({
@@ -85,6 +83,7 @@ describe('Order concurrency', () => {
     });
 
     const finalStock = finalInventory.stock;
+
     const expectedStock = initialStock - successCount * QUANTITY;
 
     console.log({
@@ -96,5 +95,13 @@ describe('Order concurrency', () => {
       expectedStock,
       durationMs,
     });
+
+    expect(successCount).toBe(INITIAL_STOCK);
+    expect(failedCount).toBe(CONCURRENT_ORDERS - INITIAL_STOCK);
+
+    expect(orderCount).toBe(successCount);
+
+    expect(finalStock).toBe(expectedStock);
+    expect(finalStock).toBe(0);
   });
 });

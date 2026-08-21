@@ -1,10 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateOrderInput, OrderRepository } from './order.repository';
 
+type OrderClient = Pick<PrismaService, 'order'>;
+
 @Injectable()
 export class PrismaOrderRepository implements OrderRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService)
+    private readonly prisma: OrderClient,
+  ) {}
 
   create(input: CreateOrderInput) {
     return this.prisma.order.create({
@@ -18,7 +23,9 @@ export class PrismaOrderRepository implements OrderRepository {
 
   findById(id: number) {
     return this.prisma.order.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
       select: {
         id: true,
         userId: true,
