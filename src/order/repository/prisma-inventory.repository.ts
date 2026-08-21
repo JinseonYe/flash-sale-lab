@@ -15,22 +15,14 @@ export class PrismaInventoryRepository implements InventoryRepository {
   }
 
   async decrease(productId: number, quantity: number) {
-    const inventory = await this.prisma.inventory.findUnique({
-      where: {
-        productId,
-      },
-    });
-
-    if (!inventory) {
-      throw new Error('재고 정보를 찾을 수 없습니다.');
-    }
-
     await this.prisma.inventory.update({
       where: {
         productId,
       },
       data: {
-        stock: inventory.stock - quantity,
+        stock: {
+          decrement: quantity,
+        },
       },
     });
   }

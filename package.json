@@ -15,6 +15,7 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:integration": "NODE_OPTIONS='--experimental-vm-modules' jest --config ./test/jest-integration.json --runInBand",
+    "test:concurrency": "NODE_OPTIONS='--experimental-vm-modules' jest --config ./test/jest-concurrency.json --runInBand",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -80,7 +81,8 @@
       "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "testPathIgnorePatterns": [
-      "\\.integration\\.spec\\.ts$"
+      "\\.integration\\.spec\\.ts$",
+      "\\.concurrency\\.spec\\.ts$"
     ]
   }
 }
