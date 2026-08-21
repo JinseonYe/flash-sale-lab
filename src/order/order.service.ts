@@ -31,27 +31,12 @@ export class OrderService {
 
   private createInTransaction(input: CreateOrderInput) {
     return this.prisma.$transaction(async (tx) => {
-      const inventories = await tx.$queryRaw<
-        Array<{
-          product_id: number;
-          stock: number;
-        }>
-      >`
-      SELECT product_id, stock
-      FROM inventories
-      WHERE product_id = ${input.productId}
-      FOR UPDATE
-    `;
-
-      const inventory = inventories[0];
-
-      if (!inventory || inventory.stock < input.quantity) {
-        throw new ConflictException('재고가 부족합니다.');
-      }
-
-      await tx.inventory.update({
+      const result = await tx.inventory.updateMany({
         where: {
           productId: input.productId,
+          stock: {
+            gte: input.quantity,
+          },
         },
         data: {
           stock: {
@@ -59,6 +44,10 @@ export class OrderService {
           },
         },
       });
+
+      if (result.count === 0) {
+        throw new ConflictException('재고가 부족합니다.');
+      }
 
       return tx.order.create({
         data: {
