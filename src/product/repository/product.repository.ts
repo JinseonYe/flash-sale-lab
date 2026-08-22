@@ -11,4 +11,13 @@ export interface ProductRepository {
     productId: number;
     stock: number;
   } | null>;
+
+  updatePrice(
+    id: number,
+    price: number,
+  ): Promise<{
+    id: number;
+    name: string;
+    price: number;
+  }>;
 }

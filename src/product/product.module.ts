@@ -1,10 +1,12 @@
 import { Module } from '@nestjs/common';
+import { RedisModule } from '../redis/redis.module';
 import { ProductController } from './product.controller';
 import { ProductService } from './product.service';
 import { PRODUCT_REPOSITORY } from './repository/product.repository';
 import { PrismaProductRepository } from './repository/prisma-product.repository';
 
 @Module({
+  imports: [RedisModule],
   controllers: [ProductController],
   providers: [
     ProductService,

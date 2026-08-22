@@ -28,4 +28,21 @@ export class PrismaProductRepository implements ProductRepository {
       },
     });
   }
+
+  updatePrice(
+    id: number,
+    price: number,
+  ): Promise<{ id: number; name: string; price: number }> {
+    return this.prisma.product.update({
+      where: {
+        id: id,
+      },
+      data: { price },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+      },
+    });
+  }
 }

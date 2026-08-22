@@ -1,20 +1,30 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PRODUCT_REPOSITORY } from './repository/product.repository';
 import type { ProductRepository } from './repository/product.repository';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class ProductService {
   constructor(
     @Inject(PRODUCT_REPOSITORY)
     private readonly productRepository: ProductRepository,
+    private readonly redisService: RedisService,
   ) {}
 
   async findById(id: number) {
+    const cachedProduct = await this.redisService.get(`product:${id}`);
+
+    if (cachedProduct) {
+      return JSON.parse(cachedProduct);
+    }
+
     const product = await this.productRepository.findById(id);
 
     if (!product) {
       throw new NotFoundException('상품을 찾을 수 없습니다.');
     }
+
+    await this.redisService.set(`product:${id}`, JSON.stringify(product), 60);
 
     return product;
   }
@@ -27,5 +37,13 @@ export class ProductService {
     }
 
     return inventory;
+  }
+
+  async updatePrice(id: number, price: number) {
+    const product = await this.productRepository.updatePrice(id, price);
+
+    await this.redisService.del(`product:${id}`);
+
+    return product;
   }
 }
