@@ -3,6 +3,8 @@ import { PRODUCT_REPOSITORY } from './repository/product.repository';
 import type { ProductRepository } from './repository/product.repository';
 import { RedisService } from '../redis/redis.service';
 
+type Product = NonNullable<Awaited<ReturnType<ProductRepository['findById']>>>;
+
 @Injectable()
 export class ProductService {
   constructor(
@@ -11,11 +13,11 @@ export class ProductService {
     private readonly redisService: RedisService,
   ) {}
 
-  async findById(id: number) {
+  async findById(id: number): Promise<Product> {
     const cachedProduct = await this.redisService.get(`product:${id}`);
 
     if (cachedProduct) {
-      return JSON.parse(cachedProduct);
+      return JSON.parse(cachedProduct) as Product;
     }
 
     const product = await this.productRepository.findById(id);

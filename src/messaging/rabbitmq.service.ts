@@ -4,8 +4,8 @@ import type { Channel, ChannelModel } from 'amqplib';
 
 @Injectable()
 export class RabbitMqService implements OnModuleInit {
-  private connection: ChannelModel;
-  private channel: Channel;
+  private connection!: ChannelModel;
+  private channel!: Channel;
 
   async onModuleInit() {
     this.connection = await amqp.connect('amqp://guest:guest@localhost:5672');
