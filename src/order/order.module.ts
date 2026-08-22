@@ -7,8 +7,11 @@ import { PrismaInventoryRepository } from './repository/prisma-inventory.reposit
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
 import { ORDER_UNIT_OF_WORK } from './transaction/order-unit-of-work';
 import { PrismaOrderUnitOfWork } from './transaction/prisma-order-unit-of-work';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
+  imports: [MessagingModule],
+
   controllers: [OrderController],
 
   providers: [

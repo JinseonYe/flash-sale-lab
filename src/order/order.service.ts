@@ -13,6 +13,7 @@ import type {
 
 import { ORDER_UNIT_OF_WORK } from './transaction/order-unit-of-work';
 import type { OrderUnitOfWork } from './transaction/order-unit-of-work';
+import { RabbitMqService } from '../messaging/rabbitmq.service';
 
 @Injectable()
 export class OrderService {
@@ -22,10 +23,12 @@ export class OrderService {
 
     @Inject(ORDER_UNIT_OF_WORK)
     private readonly unitOfWork: OrderUnitOfWork,
+
+    private readonly rabbitMqService: RabbitMqService,
   ) {}
 
-  create(input: CreateOrderInput) {
-    return this.unitOfWork.execute(
+  async create(input: CreateOrderInput) {
+    const order = await this.unitOfWork.execute(
       async ({ inventoryRepository, orderRepository }) => {
         const decreased = await inventoryRepository.decreaseIfAvailable(
           input.productId,
@@ -39,6 +42,10 @@ export class OrderService {
         return orderRepository.create(input);
       },
     );
+
+    this.rabbitMqService.publishOrderNotification(order.id);
+
+    return order;
   }
 
   async findById(id: number) {

@@ -45,4 +45,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       console.error(`Redis DEL 실패: ${key}`, error);
     }
   }
+
+  async setIfAbsent(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    try {
+      const result = await this.client.set(key, value, {
+        EX: ttlSeconds,
+        NX: true,
+      });
+
+      return result === 'OK';
+    } catch (error) {
+      console.error(`Redis SET NX 실패: ${key}`, error);
+      return false;
+    }
+  }
 }
