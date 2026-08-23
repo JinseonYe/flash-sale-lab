@@ -61,3 +61,19 @@ model Order {
   @@index([productId])
   @@map("orders")
 }
+
+enum OutboxStatus {
+  PENDING
+  SENT
+}
+
+model OutboxEvent {
+  id        Int          @id @default(autoincrement())
+  type      String
+  payload   Json
+  status    OutboxStatus @default(PENDING)
+  createdAt DateTime     @default(now()) @map("created_at")
+  sentAt    DateTime?    @map("sent_at")
+
+  @@map("outbox_events")
+}

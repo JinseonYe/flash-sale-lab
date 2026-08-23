@@ -13,7 +13,6 @@ import type {
 
 import { ORDER_UNIT_OF_WORK } from './transaction/order-unit-of-work';
 import type { OrderUnitOfWork } from './transaction/order-unit-of-work';
-import { RabbitMqService } from '../messaging/rabbitmq.service';
 
 @Injectable()
 export class OrderService {
@@ -23,13 +22,11 @@ export class OrderService {
 
     @Inject(ORDER_UNIT_OF_WORK)
     private readonly unitOfWork: OrderUnitOfWork,
-
-    private readonly rabbitMqService: RabbitMqService,
   ) {}
 
   async create(input: CreateOrderInput) {
     const order = await this.unitOfWork.execute(
-      async ({ inventoryRepository, orderRepository }) => {
+      async ({ inventoryRepository, orderRepository, outboxRepository }) => {
         const decreased = await inventoryRepository.decreaseIfAvailable(
           input.productId,
           input.quantity,
@@ -39,11 +36,18 @@ export class OrderService {
           throw new ConflictException('재고가 부족합니다.');
         }
 
-        return orderRepository.create(input);
+        const order = await orderRepository.create(input);
+
+        await outboxRepository.create({
+          type: 'ORDER_NOTIFICATION',
+          payload: {
+            orderId: order.id,
+          },
+        });
+
+        return order;
       },
     );
-
-    this.rabbitMqService.publishOrderNotification(order.id);
 
     return order;
   }

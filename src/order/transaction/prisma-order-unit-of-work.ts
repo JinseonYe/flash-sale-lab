@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-
 import { PrismaService } from '../../prisma/prisma.service';
 import { PrismaInventoryRepository } from '../repository/prisma-inventory.repository';
 import { PrismaOrderRepository } from '../repository/prisma-order.repository';
+import { PrismaOutboxRepository } from '../repository/prisma-outbox.repository';
 
 import type {
   OrderTransactionRepositories,
@@ -21,9 +21,12 @@ export class PrismaOrderUnitOfWork implements OrderUnitOfWork {
 
       const orderRepository = new PrismaOrderRepository(tx);
 
+      const outboxRepository = new PrismaOutboxRepository(tx);
+
       return work({
         inventoryRepository,
         orderRepository,
+        outboxRepository,
       });
     });
   }
