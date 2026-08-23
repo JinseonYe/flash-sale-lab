@@ -132,6 +132,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
       const alreadyProcessed = await this.redisService.getStrict(processedKey);
 
       if (alreadyProcessed) {
+        console.log(`중복 메시지 스킵: orderId=${data.orderId}`);
         channel.ack(message);
         return;
       }
