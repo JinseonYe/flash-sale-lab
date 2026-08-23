@@ -7,12 +7,24 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     url: 'redis://localhost:6379',
   });
 
-  async onModuleInit() {
-    try {
-      await this.client.connect();
-    } catch (error) {
-      console.error('Redis 연결 실패. 캐시 없이 실행합니다.', error);
-    }
+  constructor() {
+    this.client.on('error', (error) => {
+      console.error('Redis client error:', error);
+    });
+
+    this.client.on('reconnecting', () => {
+      console.warn('Redis reconnecting...');
+    });
+
+    this.client.on('ready', () => {
+      console.log('Redis connected');
+    });
+  }
+
+  onModuleInit() {
+    void this.client.connect().catch((error) => {
+      console.error('Redis 초기 연결 실패:', error);
+    });
   }
 
   async onModuleDestroy() {
@@ -62,5 +74,22 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       console.error(`Redis SET NX 실패: ${key}`, error);
       return false;
     }
+  }
+
+  async getStrict(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
+  async setIfAbsentStrict(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<boolean> {
+    const result = await this.client.set(key, value, {
+      EX: ttlSeconds,
+      NX: true,
+    });
+
+    return result === 'OK';
   }
 }

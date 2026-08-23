@@ -11,6 +11,15 @@ export class OrderNotificationConsumer implements OnModuleInit {
     const connection = await amqp.connect('amqp://guest:guest@localhost:5672');
     const channel = await connection.createChannel();
 
+    await channel.assertQueue('order.notification.retry', {
+      durable: true,
+      arguments: {
+        'x-message-ttl': 5000,
+        'x-dead-letter-exchange': '',
+        'x-dead-letter-routing-key': 'order.notification',
+      },
+    });
+
     await channel.prefetch(10);
 
     await channel.consume('order.notification', (message) => {
@@ -30,18 +39,60 @@ export class OrderNotificationConsumer implements OnModuleInit {
     const processedKey = `processed:order-notification:${data.orderId}`;
     const processingKey = `processing:order-notification:${data.orderId}`;
 
-    const alreadyProcessed = await this.redisService.get(processedKey);
+    let acquired: boolean;
 
-    if (alreadyProcessed) {
+    try {
+      const alreadyProcessed = await this.redisService.getStrict(processedKey);
+
+      if (alreadyProcessed) {
+        channel.ack(message);
+        return;
+      }
+
+      acquired = await this.redisService.setIfAbsentStrict(
+        processingKey,
+        'true',
+        30,
+      );
+    } catch (error) {
+      console.error(`Redis 멱등성 확인 실패: orderId=${data.orderId}`, error);
+
+      const retryCount = Number(
+        message.properties.headers?.['retry-count'] ?? 0,
+      );
+
+      if (retryCount >= 3) {
+        channel.sendToQueue('order.notification.dlq', message.content, {
+          persistent: true,
+          headers: {
+            ...message.properties.headers,
+            'retry-count': retryCount,
+          },
+        });
+
+        console.log(
+          `DLQ 이동: orderId=${data.orderId}, retryCount=${retryCount}`,
+        );
+
+        channel.ack(message);
+        return;
+      }
+
+      channel.sendToQueue('order.notification.retry', message.content, {
+        persistent: true,
+        headers: {
+          ...message.properties.headers,
+          'retry-count': retryCount + 1,
+        },
+      });
+
+      console.log(
+        `Retry Queue 이동: orderId=${data.orderId}, retryCount=${retryCount + 1}`,
+      );
+
       channel.ack(message);
       return;
     }
-
-    const acquired = await this.redisService.setIfAbsent(
-      processingKey,
-      'true',
-      30,
-    );
 
     if (!acquired) {
       channel.ack(message);

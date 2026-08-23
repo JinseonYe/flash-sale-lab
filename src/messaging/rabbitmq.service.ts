@@ -36,6 +36,15 @@ export class RabbitMqService implements OnModuleInit {
         durable: true,
       });
 
+      await channel.assertQueue('order.notification.retry', {
+        durable: true,
+        arguments: {
+          'x-message-ttl': 5000,
+          'x-dead-letter-exchange': '',
+          'x-dead-letter-routing-key': 'order.notification',
+        },
+      });
+
       connection.on('error', (error) => {
         console.error('RabbitMQ connection error:', error.message);
       });
