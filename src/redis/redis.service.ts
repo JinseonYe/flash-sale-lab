@@ -9,11 +9,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   constructor() {
     this.client.on('error', (error) => {
-      console.error('Redis client error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Redis error: ${message}`);
     });
 
     this.client.on('reconnecting', () => {
-      console.warn('Redis reconnecting...');
+      // 장애 테스트 중 로그 폭주 방지를 위해 생략
     });
 
     this.client.on('ready', () => {
