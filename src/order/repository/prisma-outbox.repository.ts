@@ -64,7 +64,42 @@ export class PrismaOutboxRepository implements OutboxRepository {
       data: {
         status: 'SENT',
         sentAt: new Date(),
+        processingStartedAt: null,
       },
     });
+  }
+
+  async claim(id: number): Promise<boolean> {
+    const result = await this.prisma.outboxEvent.updateMany({
+      where: {
+        id,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'PROCESSING',
+        processingStartedAt: new Date(),
+      },
+    });
+
+    return result.count === 1;
+  }
+
+  async recoverStuckProcessing(): Promise<number> {
+    const timeout = new Date(Date.now() - 30_000);
+
+    const result = await this.prisma.outboxEvent.updateMany({
+      where: {
+        status: 'PROCESSING',
+        processingStartedAt: {
+          lt: timeout,
+        },
+      },
+      data: {
+        status: 'PENDING',
+        processingStartedAt: null,
+      },
+    });
+
+    return result.count;
   }
 }

@@ -64,16 +64,18 @@ model Order {
 
 enum OutboxStatus {
   PENDING
+  PROCESSING
   SENT
 }
 
 model OutboxEvent {
-  id        Int          @id @default(autoincrement())
-  type      String
-  payload   Json
-  status    OutboxStatus @default(PENDING)
-  createdAt DateTime     @default(now()) @map("created_at")
-  sentAt    DateTime?    @map("sent_at")
+  id                  Int          @id @default(autoincrement())
+  type                String
+  payload             Json
+  status              OutboxStatus @default(PENDING)
+  createdAt           DateTime     @default(now()) @map("created_at")
+  processingStartedAt DateTime?    @map("processing_started_at")
+  sentAt              DateTime?    @map("sent_at")
 
   @@map("outbox_events")
 }

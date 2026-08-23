@@ -18,5 +18,7 @@ export interface PendingOutboxEvent {
 export interface OutboxRepository {
   create(input: CreateOutboxEventInput): Promise<void>;
   findPending(): Promise<PendingOutboxEvent[]>;
+  claim(id: number): Promise<boolean>;
+  recoverStuckProcessing(): Promise<number>;
   markAsSent(id: number): Promise<void>;
 }

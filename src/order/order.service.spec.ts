@@ -23,6 +23,14 @@ describe('OrderService', () => {
         findById: jest.fn(),
       };
 
+      const outboxRepository = {
+        create: jest.fn().mockResolvedValue(undefined),
+        findPending: jest.fn(),
+        claim: jest.fn(),
+        recoverStuckProcessing: jest.fn(),
+        markAsSent: jest.fn(),
+      };
+
       const unitOfWork: OrderUnitOfWork = {
         execute: jest.fn(
           async <T>(
@@ -31,6 +39,7 @@ describe('OrderService', () => {
             return work({
               inventoryRepository,
               orderRepository,
+              outboxRepository,
             });
           },
         ),
@@ -55,6 +64,13 @@ describe('OrderService', () => {
         userId: 1,
         productId: 1,
         quantity: 2,
+      });
+
+      expect(outboxRepository.create).toHaveBeenCalledWith({
+        type: 'ORDER_NOTIFICATION',
+        payload: {
+          orderId: 1,
+        },
       });
 
       expect(order).toEqual(
@@ -78,6 +94,14 @@ describe('OrderService', () => {
         findById: jest.fn(),
       };
 
+      const outboxRepository = {
+        create: jest.fn(),
+        findPending: jest.fn(),
+        claim: jest.fn(),
+        recoverStuckProcessing: jest.fn(),
+        markAsSent: jest.fn(),
+      };
+
       const unitOfWork: OrderUnitOfWork = {
         execute: jest.fn(
           async <T>(
@@ -86,6 +110,7 @@ describe('OrderService', () => {
             return work({
               inventoryRepository,
               orderRepository,
+              outboxRepository,
             });
           },
         ),
@@ -108,6 +133,7 @@ describe('OrderService', () => {
       );
 
       expect(orderRepository.create).not.toHaveBeenCalled();
+      expect(outboxRepository.create).not.toHaveBeenCalled();
     });
 
     it('재고와 주문 수량이 같으면 주문이 성공해야 한다', async () => {
@@ -127,6 +153,14 @@ describe('OrderService', () => {
         findById: jest.fn(),
       };
 
+      const outboxRepository = {
+        create: jest.fn().mockResolvedValue(undefined),
+        findPending: jest.fn(),
+        claim: jest.fn(),
+        recoverStuckProcessing: jest.fn(),
+        markAsSent: jest.fn(),
+      };
+
       const unitOfWork: OrderUnitOfWork = {
         execute: jest.fn(
           async <T>(
@@ -135,6 +169,7 @@ describe('OrderService', () => {
             return work({
               inventoryRepository,
               orderRepository,
+              outboxRepository,
             });
           },
         ),
@@ -159,6 +194,13 @@ describe('OrderService', () => {
         userId: 1,
         productId: 1,
         quantity: 2,
+      });
+
+      expect(outboxRepository.create).toHaveBeenCalledWith({
+        type: 'ORDER_NOTIFICATION',
+        payload: {
+          orderId: 1,
+        },
       });
 
       expect(order).toEqual(

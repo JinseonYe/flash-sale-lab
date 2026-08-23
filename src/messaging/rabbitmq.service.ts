@@ -54,7 +54,7 @@ export class RabbitMqService implements OnModuleInit {
 
       console.log('RabbitMQ connected');
     } catch (error) {
-      console.error('RabbitMQ connection failed');
+      console.error('RabbitMQ connection failed:', error);
 
       this.scheduleReconnect();
     } finally {
