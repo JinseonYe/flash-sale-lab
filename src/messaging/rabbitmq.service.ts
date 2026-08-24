@@ -98,4 +98,8 @@ export class RabbitMqService implements OnModuleInit {
 
     await this.channel.waitForConfirms();
   }
+
+  isAvailable(): boolean {
+    return this.connection !== undefined && this.channel !== undefined;
+  }
 }
