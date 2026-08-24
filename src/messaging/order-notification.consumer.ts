@@ -177,7 +177,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
         event: 'redis_idempotency_check_failed',
         requestId: data.requestId,
         orderId: data.orderId,
-        error: error instanceof Error ? error.message : String(error),
+        ...this.getErrorDetails(error),
       });
 
       const retryCount = Number(
@@ -377,5 +377,31 @@ export class OrderNotificationConsumer implements OnModuleInit {
         }
       }
     }
+  }
+
+  private getErrorDetails(error: unknown) {
+    if (error instanceof AggregateError) {
+      return {
+        errorName: error.name,
+        errorMessage: error.message,
+        causes: error.errors.map((cause) =>
+          cause instanceof Error
+            ? `${cause.name}: ${cause.message}`
+            : String(cause),
+        ),
+      };
+    }
+
+    if (error instanceof Error) {
+      return {
+        errorName: error.name,
+        errorMessage: error.message,
+      };
+    }
+
+    return {
+      errorName: 'UnknownError',
+      errorMessage: String(error),
+    };
   }
 }

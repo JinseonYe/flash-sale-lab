@@ -16,11 +16,36 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   });
 
   constructor() {
-    this.client.on('error', (error) => {
+    this.client.on('error', (error: unknown) => {
+      if (error instanceof AggregateError) {
+        this.logger.error({
+          event: 'redis_client_error',
+          errorName: error.name,
+          errorMessage: error.message,
+          causes: (error.errors as unknown[]).map((cause) =>
+            cause instanceof Error
+              ? `${cause.name}: ${cause.message}`
+              : String(cause),
+          ),
+        });
+
+        return;
+      }
+
+      if (error instanceof Error) {
+        this.logger.error({
+          event: 'redis_client_error',
+          errorName: error.name,
+          errorMessage: error.message,
+        });
+
+        return;
+      }
+
       this.logger.error({
         event: 'redis_client_error',
-        errorName: error instanceof Error ? error.name : 'UnknownError',
-        errorMessage: error instanceof Error ? error.message : String(error),
+        errorName: 'UnknownError',
+        errorMessage: String(error),
       });
     });
 

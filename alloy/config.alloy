@@ -1,0 +1,16 @@
+loki.source.file "nest" {
+  targets = [
+    {
+      __path__ = "/var/log/flash-sale/nest.log",
+      job      = "flash-sale-api",
+    },
+  ]
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
