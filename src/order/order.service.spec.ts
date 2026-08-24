@@ -48,11 +48,14 @@ describe('OrderService', () => {
       const orderService = new OrderService(orderRepository, unitOfWork);
 
       // Act
-      const order = await orderService.create({
-        userId: 1,
-        productId: 1,
-        quantity: 2,
-      });
+      const order = await orderService.create(
+        {
+          userId: 1,
+          productId: 1,
+          quantity: 2,
+        },
+        'test-request-id',
+      );
 
       // Assert
       expect(inventoryRepository.decreaseIfAvailable).toHaveBeenCalledWith(
@@ -70,6 +73,7 @@ describe('OrderService', () => {
         type: 'ORDER_NOTIFICATION',
         payload: {
           orderId: 1,
+          requestId: 'test-request-id',
         },
       });
 
@@ -120,11 +124,14 @@ describe('OrderService', () => {
 
       // Act & Assert
       await expect(
-        orderService.create({
-          userId: 1,
-          productId: 1,
-          quantity: 2,
-        }),
+        orderService.create(
+          {
+            userId: 1,
+            productId: 1,
+            quantity: 2,
+          },
+          'test-request-id',
+        ),
       ).rejects.toThrow('재고가 부족합니다.');
 
       expect(inventoryRepository.decreaseIfAvailable).toHaveBeenCalledWith(
@@ -178,11 +185,14 @@ describe('OrderService', () => {
       const orderService = new OrderService(orderRepository, unitOfWork);
 
       // Act
-      const order = await orderService.create({
-        userId: 1,
-        productId: 1,
-        quantity: 2,
-      });
+      const order = await orderService.create(
+        {
+          userId: 1,
+          productId: 1,
+          quantity: 2,
+        },
+        'test-request-id',
+      );
 
       // Assert
       expect(inventoryRepository.decreaseIfAvailable).toHaveBeenCalledWith(
@@ -200,6 +210,7 @@ describe('OrderService', () => {
         type: 'ORDER_NOTIFICATION',
         payload: {
           orderId: 1,
+          requestId: 'test-request-id',
         },
       });
 

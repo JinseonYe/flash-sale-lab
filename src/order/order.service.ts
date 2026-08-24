@@ -24,7 +24,7 @@ export class OrderService {
     private readonly unitOfWork: OrderUnitOfWork,
   ) {}
 
-  async create(input: CreateOrderInput) {
+  async create(input: CreateOrderInput, requestId: string) {
     const order = await this.unitOfWork.execute(
       async ({ inventoryRepository, orderRepository, outboxRepository }) => {
         const decreased = await inventoryRepository.decreaseIfAvailable(
@@ -42,6 +42,7 @@ export class OrderService {
           type: 'ORDER_NOTIFICATION',
           payload: {
             orderId: order.id,
+            requestId,
           },
         });
 

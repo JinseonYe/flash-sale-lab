@@ -2,6 +2,7 @@ import {
   CallHandler,
   ExecutionContext,
   Injectable,
+  Logger,
   NestInterceptor,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
@@ -11,6 +12,8 @@ import { httpRequestDurationSeconds } from './metrics';
 
 @Injectable()
 export class HttpLatencyInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(HttpLatencyInterceptor.name);
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest<Request>();
     const response = context.switchToHttp().getResponse<Response>();
@@ -40,7 +43,14 @@ export class HttpLatencyInterceptor implements NestInterceptor {
           latencySeconds,
         );
 
-        console.log(`${request.method} ${request.url} ${latencyMs}ms`);
+        this.logger.log({
+          event: 'http_request_completed',
+          requestId: request.requestId,
+          method: request.method,
+          route: routePath,
+          statusCode: response.statusCode,
+          latencyMs,
+        });
       }),
     );
   }

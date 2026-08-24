@@ -35,11 +35,14 @@ describe('OrderService Integration', () => {
     });
 
     // Act
-    const order = await orderService.create({
-      userId: user.id,
-      productId: product.id,
-      quantity: 2,
-    });
+    const order = await orderService.create(
+      {
+        userId: user.id,
+        productId: product.id,
+        quantity: 2,
+      },
+      'test-request-id',
+    );
 
     // Assert
     const inventory = await prisma.inventory.findUniqueOrThrow({

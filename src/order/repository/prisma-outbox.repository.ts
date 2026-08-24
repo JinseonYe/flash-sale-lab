@@ -41,7 +41,8 @@ export class PrismaOutboxRepository implements OutboxRepository {
         typeof payload !== 'object' ||
         payload === null ||
         Array.isArray(payload) ||
-        typeof payload.orderId !== 'number'
+        typeof payload.orderId !== 'number' ||
+        typeof payload.requestId !== 'string'
       ) {
         throw new Error(`Invalid outbox payload: ${event.id}`);
       }
@@ -51,6 +52,7 @@ export class PrismaOutboxRepository implements OutboxRepository {
         type: event.type,
         payload: {
           orderId: payload.orderId,
+          requestId: payload.requestId,
         },
       };
     });

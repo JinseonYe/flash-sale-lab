@@ -1,17 +1,27 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { createClient } from 'redis';
 import { redisOperationFailuresTotal } from '../observability/metrics';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
+
   private readonly client = createClient({
     url: 'redis://localhost:6379',
   });
 
   constructor() {
     this.client.on('error', (error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Redis error: ${message}`);
+      this.logger.error({
+        event: 'redis_client_error',
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     });
 
     this.client.on('reconnecting', () => {
@@ -19,13 +29,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     });
 
     this.client.on('ready', () => {
-      console.log('Redis connected');
+      this.logger.log({
+        event: 'redis_connected',
+      });
     });
   }
 
   onModuleInit() {
     void this.client.connect().catch((error) => {
-      console.error('Redis 초기 연결 실패:', error);
+      this.logger.error({
+        event: 'redis_initial_connection_failed',
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     });
   }
 
@@ -39,7 +55,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       redisOperationFailuresTotal.inc({ operation: 'get' });
 
-      console.error(`Redis GET 실패: ${key}`, error);
+      this.logger.error({
+        event: 'redis_operation_failed',
+        operation: 'get',
+        key,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+
       return null;
     }
   }
@@ -52,7 +75,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       redisOperationFailuresTotal.inc({ operation: 'set' });
 
-      console.error(`Redis SET 실패: ${key}`, error);
+      this.logger.error({
+        event: 'redis_operation_failed',
+        operation: 'set',
+        key,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -60,7 +89,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.client.del(key);
     } catch (error) {
-      console.error(`Redis DEL 실패: ${key}`, error);
+      this.logger.error({
+        event: 'redis_operation_failed',
+        operation: 'del',
+        key,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
@@ -77,7 +112,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
       return result === 'OK';
     } catch (error) {
-      console.error(`Redis SET NX 실패: ${key}`, error);
+      this.logger.error({
+        event: 'redis_operation_failed',
+        operation: 'set_nx',
+        key,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+
       return false;
     }
   }

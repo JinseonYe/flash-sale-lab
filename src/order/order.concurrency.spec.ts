@@ -49,11 +49,14 @@ describe('Order concurrency', () => {
     expect(initialStock).toBe(INITIAL_STOCK);
 
     const orderPromises = Array.from({ length: CONCURRENT_ORDERS }, () =>
-      orderService.create({
-        userId: user.id,
-        productId: product.id,
-        quantity: QUANTITY,
-      }),
+      orderService.create(
+        {
+          userId: user.id,
+          productId: product.id,
+          quantity: QUANTITY,
+        },
+        'test-request-id',
+      ),
     );
 
     const startedAt = performance.now();

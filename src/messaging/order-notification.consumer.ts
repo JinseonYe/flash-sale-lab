@@ -1,10 +1,12 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class OrderNotificationConsumer implements OnModuleInit {
+  private readonly logger = new Logger(OrderNotificationConsumer.name);
+
   constructor(private readonly redisService: RedisService) {}
 
   private connection?: ChannelModel;
@@ -59,11 +61,16 @@ export class OrderNotificationConsumer implements OnModuleInit {
       });
 
       channel.on('error', (error) => {
-        console.error('Consumer RabbitMQ channel error:', error.message);
+        this.logger.error({
+          event: 'rabbitmq_consumer_channel_error',
+          error: error.message,
+        });
       });
 
       channel.on('close', () => {
-        console.error('Consumer RabbitMQ channel closed');
+        this.logger.warn({
+          event: 'rabbitmq_consumer_channel_closed',
+        });
 
         if (this.channel === channel) {
           this.channel = undefined;
@@ -79,11 +86,16 @@ export class OrderNotificationConsumer implements OnModuleInit {
       });
 
       connection.on('error', (error) => {
-        console.error('Consumer RabbitMQ connection error:', error.message);
+        this.logger.error({
+          event: 'rabbitmq_consumer_connection_error',
+          error: error.message,
+        });
       });
 
       connection.on('close', () => {
-        console.error('Consumer RabbitMQ connection closed');
+        this.logger.warn({
+          event: 'rabbitmq_consumer_connection_closed',
+        });
 
         if (this.connection === connection) {
           this.connection = undefined;
@@ -95,9 +107,15 @@ export class OrderNotificationConsumer implements OnModuleInit {
       this.connection = connection;
       this.channel = channel;
 
-      console.log('Order notification consumer connected');
+      this.logger.log({
+        event: 'order_notification_consumer_connected',
+      });
     } catch (error) {
-      console.error('Consumer RabbitMQ connection failed:', error);
+      this.logger.error({
+        event: 'rabbitmq_consumer_connection_failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       this.scheduleReconnect();
     } finally {
       this.connecting = false;
@@ -121,7 +139,14 @@ export class OrderNotificationConsumer implements OnModuleInit {
   ) {
     const data = JSON.parse(message.content.toString()) as {
       orderId: number;
+      requestId: string;
     };
+
+    this.logger.log({
+      event: 'order_notification_received',
+      requestId: data.requestId,
+      orderId: data.orderId,
+    });
 
     const processedKey = `processed:order-notification:${data.orderId}`;
     const processingKey = `processing:order-notification:${data.orderId}`;
@@ -132,7 +157,12 @@ export class OrderNotificationConsumer implements OnModuleInit {
       const alreadyProcessed = await this.redisService.getStrict(processedKey);
 
       if (alreadyProcessed) {
-        console.log(`중복 메시지 스킵: orderId=${data.orderId}`);
+        this.logger.log({
+          event: 'order_notification_duplicate_skipped',
+          requestId: data.requestId,
+          orderId: data.orderId,
+        });
+
         channel.ack(message);
         return;
       }
@@ -143,7 +173,12 @@ export class OrderNotificationConsumer implements OnModuleInit {
         30,
       );
     } catch (error) {
-      console.error(`Redis 멱등성 확인 실패: orderId=${data.orderId}`, error);
+      this.logger.error({
+        event: 'redis_idempotency_check_failed',
+        requestId: data.requestId,
+        orderId: data.orderId,
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       const retryCount = Number(
         message.properties.headers?.['retry-count'] ?? 0,
@@ -161,13 +196,21 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
           await channel.waitForConfirms();
 
-          console.log(
-            `DLQ 이동 확인: orderId=${data.orderId}, retryCount=${retryCount}`,
-          );
+          this.logger.warn({
+            event: 'order_notification_moved_to_dlq',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            retryCount,
+          });
 
           channel.ack(message);
         } catch (error) {
-          console.error(`DLQ 발행 확인 실패: orderId=${data.orderId}`, error);
+          this.logger.error({
+            event: 'order_notification_dlq_publish_failed',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            error: error instanceof Error ? error.message : String(error),
+          });
 
           try {
             channel.nack(message, false, true);
@@ -190,16 +233,21 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
         await channel.waitForConfirms();
 
-        console.log(
-          `Retry Queue 이동 확인: orderId=${data.orderId}, retryCount=${retryCount + 1}`,
-        );
+        this.logger.log({
+          event: 'order_notification_retry_scheduled',
+          requestId: data.requestId,
+          orderId: data.orderId,
+          retryCount: retryCount + 1,
+        });
 
         channel.ack(message);
       } catch (error) {
-        console.error(
-          `Retry Queue 발행 확인 실패: orderId=${data.orderId}`,
-          error,
-        );
+        this.logger.error({
+          event: 'order_notification_retry_publish_failed',
+          requestId: data.requestId,
+          orderId: data.orderId,
+          error: error instanceof Error ? error.message : String(error),
+        });
 
         try {
           channel.nack(message, false, true);
@@ -213,6 +261,12 @@ export class OrderNotificationConsumer implements OnModuleInit {
     }
 
     if (!acquired) {
+      this.logger.log({
+        event: 'order_notification_processing_not_acquired',
+        requestId: data.requestId,
+        orderId: data.orderId,
+      });
+
       channel.ack(message);
       return;
     }
@@ -224,8 +278,21 @@ export class OrderNotificationConsumer implements OnModuleInit {
       await this.redisService.set(processedKey, 'true', 86400);
       await this.redisService.del(processingKey);
 
+      this.logger.log({
+        event: 'order_notification_processed',
+        requestId: data.requestId,
+        orderId: data.orderId,
+      });
+
       channel.ack(message);
-    } catch {
+    } catch (error) {
+      this.logger.error({
+        event: 'order_notification_processing_failed',
+        requestId: data.requestId,
+        orderId: data.orderId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
       await this.redisService.del(processingKey);
 
       const retryCount = Number(
@@ -244,9 +311,24 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
           await channel.waitForConfirms();
 
+          this.logger.warn({
+            event: 'order_notification_moved_to_dlq',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            retryCount,
+          });
+
           channel.ack(message);
-        } catch (error) {
-          console.error(`DLQ 발행 확인 실패: orderId=${data.orderId}`, error);
+        } catch (publishError) {
+          this.logger.error({
+            event: 'order_notification_dlq_publish_failed',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            error:
+              publishError instanceof Error
+                ? publishError.message
+                : String(publishError),
+          });
 
           try {
             channel.nack(message, false, true);
@@ -269,12 +351,24 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
         await channel.waitForConfirms();
 
+        this.logger.log({
+          event: 'order_notification_reprocess_scheduled',
+          requestId: data.requestId,
+          orderId: data.orderId,
+          retryCount: retryCount + 1,
+        });
+
         channel.ack(message);
-      } catch (error) {
-        console.error(
-          `재처리 메시지 발행 확인 실패: orderId=${data.orderId}`,
-          error,
-        );
+      } catch (publishError) {
+        this.logger.error({
+          event: 'order_notification_reprocess_publish_failed',
+          requestId: data.requestId,
+          orderId: data.orderId,
+          error:
+            publishError instanceof Error
+              ? publishError.message
+              : String(publishError),
+        });
 
         try {
           channel.nack(message, false, true);

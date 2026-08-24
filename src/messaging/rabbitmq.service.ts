@@ -1,9 +1,11 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel } from 'amqplib';
 
 @Injectable()
 export class RabbitMqService implements OnModuleInit {
+  private readonly logger = new Logger(RabbitMqService.name);
+
   private connection?: ChannelModel;
   private channel?: ConfirmChannel;
 
@@ -46,11 +48,17 @@ export class RabbitMqService implements OnModuleInit {
       });
 
       connection.on('error', (error) => {
-        console.error('RabbitMQ connection error:', error.message);
+        this.logger.error({
+          event: 'rabbitmq_connection_error',
+          errorName: error.name,
+          errorMessage: error.message,
+        });
       });
 
       connection.on('close', () => {
-        console.error('RabbitMQ connection closed');
+        this.logger.warn({
+          event: 'rabbitmq_connection_closed',
+        });
 
         this.connection = undefined;
         this.channel = undefined;
@@ -61,9 +69,15 @@ export class RabbitMqService implements OnModuleInit {
       this.connection = connection;
       this.channel = channel;
 
-      console.log('RabbitMQ connected');
+      this.logger.log({
+        event: 'rabbitmq_connected',
+      });
     } catch (error) {
-      console.error('RabbitMQ connection failed:', error);
+      this.logger.error({
+        event: 'rabbitmq_connection_failed',
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
 
       this.scheduleReconnect();
     } finally {
@@ -83,13 +97,17 @@ export class RabbitMqService implements OnModuleInit {
     }, 3000);
   }
 
-  async publishOrderNotification(orderId: number): Promise<void> {
+  async publishOrderNotification(
+    orderId: number,
+    requestId: string,
+  ): Promise<void> {
     if (!this.channel) {
       throw new Error('RabbitMQ channel is not available');
     }
 
     const message = JSON.stringify({
       orderId,
+      requestId,
     });
 
     this.channel.sendToQueue('order.notification', Buffer.from(message), {

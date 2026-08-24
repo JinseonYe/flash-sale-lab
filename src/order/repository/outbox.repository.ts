@@ -4,6 +4,7 @@ export interface CreateOutboxEventInput {
   type: string;
   payload: {
     orderId: number;
+    requestId: string;
   };
 }
 
@@ -12,6 +13,7 @@ export interface PendingOutboxEvent {
   type: string;
   payload: {
     orderId: number;
+    requestId: string;
   };
 }
 
