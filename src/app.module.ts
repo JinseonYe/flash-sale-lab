@@ -6,9 +6,16 @@ import { OrderModule } from './order/order.module';
 import { ProductModule } from './product/product.module';
 import { MessagingModule } from './messaging/messaging.module';
 import { MetricsController } from './observability/metrics.controller';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [PrismaModule, OrderModule, ProductModule, MessagingModule],
+  imports: [
+    PrismaModule,
+    OrderModule,
+    ProductModule,
+    MessagingModule,
+    HealthModule,
+  ],
   controllers: [AppController, MetricsController],
   providers: [AppService],
 })

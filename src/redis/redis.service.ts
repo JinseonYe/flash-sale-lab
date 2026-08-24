@@ -98,4 +98,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
     return result === 'OK';
   }
+
+  async pingStrict(): Promise<string> {
+    return this.client.ping();
+  }
 }

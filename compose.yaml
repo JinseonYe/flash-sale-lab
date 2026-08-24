@@ -85,6 +85,19 @@ services:
     depends_on:
       - prometheus
 
+  blackbox-exporter:
+    image: quay.io/prometheus/blackbox-exporter:latest
+    container_name: flash-sale-blackbox-exporter
+
+    ports:
+      - '9115:9115'
+
+    volumes:
+      - ./blackbox/blackbox.yml:/config/blackbox.yml:ro
+
+    command:
+      - '--config.file=/config/blackbox.yml'
+
 volumes:
   postgres:
   grafana:
