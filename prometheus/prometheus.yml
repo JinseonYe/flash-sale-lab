@@ -29,3 +29,24 @@ scrape_configs:
 
       - target_label: __address__
         replacement: 'blackbox-exporter:9115'
+
+  - job_name: 'rabbitmq'
+    scrape_interval: 5s
+
+    static_configs:
+      - targets:
+          - 'rabbitmq:15692'
+
+  - job_name: 'rabbitmq-queues'
+    scrape_interval: 5s
+
+    metrics_path: /metrics/detailed
+
+    params:
+      family:
+        - queue_coarse_metrics
+        - queue_consumer_count
+
+    static_configs:
+      - targets:
+          - 'rabbitmq:15692'

@@ -17,3 +17,9 @@ export const dependencyHealth = new Gauge({
   help: 'Health status of application dependencies',
   labelNames: ['dependency'],
 });
+
+export const outboxEvents = new Gauge({
+  name: 'outbox_events',
+  help: 'Current number of outbox events by status',
+  labelNames: ['status'],
+});
