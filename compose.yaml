@@ -62,5 +62,15 @@ services:
       timeout: 3s
       retries: 5
 
+  prometheus:
+    image: prom/prometheus
+    container_name: flash-sale-prometheus
+
+    ports:
+      - '9090:9090'
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
 volumes:
   postgres:

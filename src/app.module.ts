@@ -5,10 +5,11 @@ import { PrismaModule } from './prisma/prisma.module';
 import { OrderModule } from './order/order.module';
 import { ProductModule } from './product/product.module';
 import { MessagingModule } from './messaging/messaging.module';
+import { MetricsController } from './observability/metrics.controller';
 
 @Module({
   imports: [PrismaModule, OrderModule, ProductModule, MessagingModule],
-  controllers: [AppController],
+  controllers: [AppController, MetricsController],
   providers: [AppService],
 })
 export class AppModule {}

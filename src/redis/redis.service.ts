@@ -1,5 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { createClient } from 'redis';
+import { redisOperationFailuresTotal } from '../observability/metrics';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
@@ -36,6 +37,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     try {
       return await this.client.get(key);
     } catch (error) {
+      redisOperationFailuresTotal.inc({ operation: 'get' });
+
       console.error(`Redis GET 실패: ${key}`, error);
       return null;
     }
@@ -47,6 +50,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         EX: ttlSeconds,
       });
     } catch (error) {
+      redisOperationFailuresTotal.inc({ operation: 'set' });
+
       console.error(`Redis SET 실패: ${key}`, error);
     }
   }
