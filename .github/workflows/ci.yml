@@ -5,7 +5,8 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  checks:
+    name: CI Checks
     runs-on: ubuntu-latest
 
     steps:
