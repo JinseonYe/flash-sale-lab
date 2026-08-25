@@ -1,0 +1,1 @@
+const intentionallyUnused = 'protection test';
