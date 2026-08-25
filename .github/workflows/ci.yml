@@ -32,3 +32,6 @@ jobs:
 
       - name: Lint
         run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
+
+      - name: Test
+        run: pnpm test
