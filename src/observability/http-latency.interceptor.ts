@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { httpRequestDurationSeconds } from './metrics';
+import { getActiveTraceContext } from './trace-context';
 
 @Injectable()
 export class HttpLatencyInterceptor implements NestInterceptor {
@@ -46,6 +47,7 @@ export class HttpLatencyInterceptor implements NestInterceptor {
         this.logger.log({
           event: 'http_request_completed',
           requestId: request.requestId,
+          ...getActiveTraceContext(),
           method: request.method,
           route: routePath,
           statusCode: response.statusCode,

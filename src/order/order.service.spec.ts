@@ -74,6 +74,7 @@ describe('OrderService', () => {
         payload: {
           orderId: 1,
           requestId: 'test-request-id',
+          traceContext: {},
         },
       });
 
@@ -211,6 +212,7 @@ describe('OrderService', () => {
         payload: {
           orderId: 1,
           requestId: 'test-request-id',
+          traceContext: {},
         },
       });
 

@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RedisService } from '../redis/redis.service';
+import { getActiveTraceContext } from '../observability/trace-context';
 
 @Injectable()
 export class OrderNotificationConsumer implements OnModuleInit {
@@ -145,6 +146,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
     this.logger.log({
       event: 'order_notification_received',
       requestId: data.requestId,
+      ...getActiveTraceContext(),
       orderId: data.orderId,
     });
 
@@ -281,6 +283,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
       this.logger.log({
         event: 'order_notification_processed',
         requestId: data.requestId,
+        ...getActiveTraceContext(),
         orderId: data.orderId,
       });
 

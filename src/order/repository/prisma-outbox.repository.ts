@@ -47,12 +47,23 @@ export class PrismaOutboxRepository implements OutboxRepository {
         throw new Error(`Invalid outbox payload: ${event.id}`);
       }
 
+      const traceContext = payload.traceContext;
+
+      if (
+        typeof traceContext !== 'object' ||
+        traceContext === null ||
+        Array.isArray(traceContext)
+      ) {
+        throw new Error('Invalid traceContext');
+      }
+
       return {
         id: event.id,
         type: event.type,
         payload: {
           orderId: payload.orderId,
           requestId: payload.requestId,
+          traceContext: traceContext as Record<string, string>,
         },
       };
     });

@@ -5,6 +5,7 @@ export interface CreateOutboxEventInput {
   payload: {
     orderId: number;
     requestId: string;
+    traceContext: Record<string, string>;
   };
 }
 
@@ -14,6 +15,7 @@ export interface PendingOutboxEvent {
   payload: {
     orderId: number;
     requestId: string;
+    traceContext: Record<string, string>;
   };
 }
 

@@ -117,6 +117,7 @@ services:
 
     ports:
       - '12345:12345'
+      - '4318:4318'
 
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
@@ -131,6 +132,16 @@ services:
 
     depends_on:
       - loki
+
+  tempo:
+    image: grafana/tempo:3.0.2
+    container_name: flash-sale-tempo
+    ports:
+      - '3200:3200'
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    command:
+      - '-config.file=/etc/tempo/tempo.yaml'
 
 volumes:
   postgres:

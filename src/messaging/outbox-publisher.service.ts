@@ -1,15 +1,18 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import { context, propagation, trace } from '@opentelemetry/api';
 
 import { RabbitMqService } from './rabbitmq.service';
 import {
   OUTBOX_REPOSITORY,
   type OutboxRepository,
 } from '../order/repository/outbox.repository';
+import { getActiveTraceContext } from '../observability/trace-context';
 
 @Injectable()
 export class OutboxPublisherService {
   private readonly logger = new Logger(OutboxPublisherService.name);
+  private readonly tracer = trace.getTracer('outbox-publisher');
 
   constructor(
     @Inject(OUTBOX_REPOSITORY)
@@ -33,28 +36,46 @@ export class OutboxPublisherService {
         continue;
       }
 
-      this.logger.log({
-        event: 'outbox_publish_started',
-        requestId: event.payload.requestId,
-        serverPort: process.env.PORT ?? 3000,
-        outboxId: event.id,
-        orderId: event.payload.orderId,
-      });
-
-      await this.rabbitMqService.publishOrderNotification(
-        event.payload.orderId,
-        event.payload.requestId,
+      const parentContext = propagation.extract(
+        context.active(),
+        event.payload.traceContext,
       );
 
-      this.logger.log({
-        event: 'outbox_publish_succeeded',
-        requestId: event.payload.requestId,
-        serverPort: process.env.PORT ?? 3000,
-        outboxId: event.id,
-        orderId: event.payload.orderId,
-      });
+      await this.tracer.startActiveSpan(
+        'outbox.publish',
+        {},
+        parentContext,
+        async (span) => {
+          try {
+            this.logger.log({
+              event: 'outbox_publish_started',
+              requestId: event.payload.requestId,
+              ...getActiveTraceContext(),
+              serverPort: process.env.PORT ?? 3000,
+              outboxId: event.id,
+              orderId: event.payload.orderId,
+            });
 
-      await this.outboxRepository.markAsSent(event.id);
+            await this.rabbitMqService.publishOrderNotification(
+              event.payload.orderId,
+              event.payload.requestId,
+            );
+
+            this.logger.log({
+              event: 'outbox_publish_succeeded',
+              requestId: event.payload.requestId,
+              ...getActiveTraceContext(),
+              serverPort: process.env.PORT ?? 3000,
+              outboxId: event.id,
+              orderId: event.payload.orderId,
+            });
+
+            await this.outboxRepository.markAsSent(event.id);
+          } finally {
+            span.end();
+          }
+        },
+      );
     }
   }
 

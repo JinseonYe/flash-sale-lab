@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { context, propagation } from '@opentelemetry/api';
 
 import { ORDER_REPOSITORY } from './repository/order.repository';
 import type {
@@ -38,11 +39,16 @@ export class OrderService {
 
         const order = await orderRepository.create(input);
 
+        const traceContext: Record<string, string> = {};
+
+        propagation.inject(context.active(), traceContext);
+
         await outboxRepository.create({
           type: 'ORDER_NOTIFICATION',
           payload: {
             orderId: order.id,
             requestId,
+            traceContext,
           },
         });
 
