@@ -68,6 +68,9 @@ echo "Waiting for API health check..."
 for i in {1..20}; do
   if curl -fsS http://localhost:3000/health > /dev/null; then
     echo "Deployment succeeded: API is healthy."
+
+    docker image prune -a -f
+
     exit 0
   fi
 
