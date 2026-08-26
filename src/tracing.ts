@@ -3,7 +3,9 @@ import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 
 const traceExporter = new OTLPTraceExporter({
-  url: 'http://localhost:4318/v1/traces',
+  url:
+    process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
+    'http://localhost:4318/v1/traces',
 });
 
 const sdk = new NodeSDK({
