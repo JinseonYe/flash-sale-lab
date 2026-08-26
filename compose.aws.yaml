@@ -47,7 +47,7 @@ services:
       retries: 10
 
   api:
-    image: 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com/flash-sale-api:step16
+    image: 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com/flash-sale-api:${IMAGE_TAG}
     container_name: flash-sale-api
     restart: unless-stopped
     environment:
@@ -67,7 +67,7 @@ services:
         condition: service_healthy
 
   migrator:
-    image: 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com/flash-sale-api:migrator
+    image: 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com/flash-sale-api:${IMAGE_TAG}-migrator
     container_name: flash-sale-migrator
     environment:
       DATABASE_URL: ${DATABASE_URL}
