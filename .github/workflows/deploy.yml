@@ -28,28 +28,26 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push runtime image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: flash-sale-api
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build \
-            --target runtime \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            .
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
 
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build and push runtime image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/flash-sale-api:${{ github.sha }}
 
       - name: Build and push migrator image
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: flash-sale-api
-          IMAGE_TAG: ${{ github.sha }}-migrator
-        run: |
-          docker build \
-            --target migrator \
-            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
-            .
-
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: migrator
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.login-ecr.outputs.registry }}/flash-sale-api:${{ github.sha }}-migrator

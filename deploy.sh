@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+: "${IMAGE_TAG:?IMAGE_TAG is required}"
 
 export POSTGRES_DB="$(aws ssm get-parameter \
   --name "/flash-sale/prod/POSTGRES_DB" \
