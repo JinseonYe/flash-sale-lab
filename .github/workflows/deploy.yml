@@ -55,10 +55,19 @@ jobs:
       - name: Deploy to EC2 with SSM
         id: deploy
         run: |
+          DEPLOY_SH_B64=$(base64 -w 0 deploy.sh)
+          COMPOSE_B64=$(base64 -w 0 compose.aws.yaml)
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "i-04a58cbfc26f8ae75" \
             --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["sudo -u ec2-user -H bash -lc '\''cd /home/ec2-user/flash-sale && IMAGE_TAG=${{ github.sha }} ./deploy.sh'\''"]' \
+            --parameters "commands=[
+              \"echo '$DEPLOY_SH_B64' | base64 -d > /home/ec2-user/flash-sale/deploy.sh\",
+              \"echo '$COMPOSE_B64' | base64 -d > /home/ec2-user/flash-sale/compose.aws.yaml\",
+              \"chown ec2-user:ec2-user /home/ec2-user/flash-sale/deploy.sh /home/ec2-user/flash-sale/compose.aws.yaml\",
+              \"chmod +x /home/ec2-user/flash-sale/deploy.sh\",
+              \"sudo -u ec2-user -H bash -lc 'cd /home/ec2-user/flash-sale && IMAGE_TAG=${{ github.sha }} ./deploy.sh'\"
+            ]" \
             --query "Command.CommandId" \
             --output text)
 
