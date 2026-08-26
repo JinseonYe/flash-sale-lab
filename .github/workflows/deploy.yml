@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  aws-auth:
-    name: Verify AWS OIDC
+  deploy:
+    name: Build and Push Images
     runs-on: ubuntu-latest
 
     steps:
@@ -24,5 +24,32 @@ jobs:
           role-to-assume: arn:aws:iam::704887592908:role/flash-sale-github-actions-role
           aws-region: ap-northeast-2
 
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push runtime image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: flash-sale-api
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            --target runtime \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            .
+
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Build and push migrator image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: flash-sale-api
+          IMAGE_TAG: ${{ github.sha }}-migrator
+        run: |
+          docker build \
+            --target migrator \
+            -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+            .
+
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
