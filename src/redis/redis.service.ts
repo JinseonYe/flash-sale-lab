@@ -12,7 +12,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
 
   private readonly client = createClient({
-    url: 'redis://localhost:6379',
+    url: process.env.REDIS_URL ?? 'redis://localhost:6379',
   });
 
   constructor() {

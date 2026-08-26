@@ -29,7 +29,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
     try {
       const connection = await amqp.connect(
-        'amqp://guest:guest@localhost:5672',
+        process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672',
       );
 
       const channel = await connection.createConfirmChannel();
