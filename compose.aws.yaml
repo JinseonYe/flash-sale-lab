@@ -54,6 +54,10 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
       RABBITMQ_URL: ${RABBITMQ_URL}
+
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: '0.1'
+      OTEL_NODE_ENABLED_INSTRUMENTATIONS: http,nestjs-core,amqplib
     ports:
       - '3000:3000'
     networks:
