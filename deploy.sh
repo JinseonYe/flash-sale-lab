@@ -55,6 +55,14 @@ export RABBITMQ_URL="$(aws ssm get-parameter \
   --query "Parameter.Value" \
   --output text)"
 
+echo "Logging in to Amazon ECR..."
+
+aws ecr get-login-password \
+  --region ap-northeast-2 \
+  | docker login \
+      --username AWS \
+      --password-stdin 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com
+
 docker compose -f compose.aws.yaml pull
 
 docker compose -f compose.aws.yaml \
