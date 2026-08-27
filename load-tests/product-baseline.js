@@ -2,12 +2,14 @@ import http from 'k6/http';
 import { check } from 'k6';
 
 export const options = {
-  vus: 300,
+  vus: 100,
   duration: '30s',
 };
 
+const baseUrl = __ENV.BASE_URL;
+
 export default function () {
-  const response = http.get('http://localhost:3000/products/65');
+  const response = http.get(`${baseUrl}/products/1`);
 
   check(response, {
     'status is 200': (res) => res.status === 200,
