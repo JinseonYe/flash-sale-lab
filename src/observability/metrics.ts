@@ -23,3 +23,10 @@ export const outboxEvents = new Gauge({
   help: 'Current number of outbox events by status',
   labelNames: ['status'],
 });
+
+export const orderStepDurationSeconds = new Histogram({
+  name: 'order_step_duration_seconds',
+  help: 'Order processing step duration in seconds',
+  labelNames: ['step'],
+  buckets: [0.001, 0.003, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5],
+});
