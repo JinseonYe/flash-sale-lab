@@ -2,7 +2,6 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RedisService } from '../redis/redis.service';
-import { getActiveTraceContext } from '../observability/trace-context';
 import { performance } from 'node:perf_hooks';
 import { orderNotificationConsumerStepDurationSeconds } from '../observability/metrics';
 
@@ -146,13 +145,6 @@ export class OrderNotificationConsumer implements OnModuleInit {
       orderId: number;
       requestId: string;
     };
-
-    this.logger.log({
-      event: 'order_notification_received',
-      requestId: data.requestId,
-      ...getActiveTraceContext(),
-      orderId: data.orderId,
-    });
 
     const processedKey = `processed:order-notification:${data.orderId}`;
     const processingKey = `processing:order-notification:${data.orderId}`;
@@ -319,13 +311,6 @@ export class OrderNotificationConsumer implements OnModuleInit {
         { step: 'release_processing_lock' },
         (performance.now() - releaseProcessingLockStartedAt) / 1000,
       );
-
-      this.logger.log({
-        event: 'order_notification_processed',
-        requestId: data.requestId,
-        ...getActiveTraceContext(),
-        orderId: data.orderId,
-      });
 
       channel.ack(message);
 

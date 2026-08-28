@@ -7,7 +7,6 @@ import {
   OUTBOX_REPOSITORY,
   type OutboxRepository,
 } from '../order/repository/outbox.repository';
-import { getActiveTraceContext } from '../observability/trace-context';
 
 @Injectable()
 export class OutboxPublisherService {
@@ -47,28 +46,10 @@ export class OutboxPublisherService {
         parentContext,
         async (span) => {
           try {
-            this.logger.log({
-              event: 'outbox_publish_started',
-              requestId: event.payload.requestId,
-              ...getActiveTraceContext(),
-              serverPort: process.env.PORT ?? 3000,
-              outboxId: event.id,
-              orderId: event.payload.orderId,
-            });
-
             await this.rabbitMqService.publishOrderNotification(
               event.payload.orderId,
               event.payload.requestId,
             );
-
-            this.logger.log({
-              event: 'outbox_publish_succeeded',
-              requestId: event.payload.requestId,
-              ...getActiveTraceContext(),
-              serverPort: process.env.PORT ?? 3000,
-              outboxId: event.id,
-              orderId: event.payload.orderId,
-            });
 
             await this.outboxRepository.markAsSent(event.id);
           } finally {
