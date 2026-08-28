@@ -3,6 +3,8 @@ import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RedisService } from '../redis/redis.service';
 import { getActiveTraceContext } from '../observability/trace-context';
+import { performance } from 'node:perf_hooks';
+import { orderNotificationConsumerStepDurationSeconds } from '../observability/metrics';
 
 @Injectable()
 export class OrderNotificationConsumer implements OnModuleInit {
@@ -51,7 +53,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
         },
       });
 
-      await channel.prefetch(10);
+      await channel.prefetch(100);
 
       await channel.consume('order.notification', (message) => {
         if (!message) {
@@ -138,6 +140,8 @@ export class OrderNotificationConsumer implements OnModuleInit {
     channel: ConfirmChannel,
     message: ConsumeMessage,
   ) {
+    const handleStartedAt = performance.now();
+
     const data = JSON.parse(message.content.toString()) as {
       orderId: number;
       requestId: string;
@@ -156,7 +160,14 @@ export class OrderNotificationConsumer implements OnModuleInit {
     let acquired: boolean;
 
     try {
+      const processedCheckStartedAt = performance.now();
+
       const alreadyProcessed = await this.redisService.getStrict(processedKey);
+
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'processed_check' },
+        (performance.now() - processedCheckStartedAt) / 1000,
+      );
 
       if (alreadyProcessed) {
         this.logger.log({
@@ -169,10 +180,17 @@ export class OrderNotificationConsumer implements OnModuleInit {
         return;
       }
 
+      const processingLockStartedAt = performance.now();
+
       acquired = await this.redisService.setIfAbsentStrict(
         processingKey,
         'true',
         30,
+      );
+
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'processing_lock' },
+        (performance.now() - processingLockStartedAt) / 1000,
       );
     } catch (error) {
       this.logger.error({
@@ -274,11 +292,33 @@ export class OrderNotificationConsumer implements OnModuleInit {
     }
 
     try {
+      const notificationStartedAt = performance.now();
+
       // 실제로는 외부 알림 API 호출
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'notification' },
+        (performance.now() - notificationStartedAt) / 1000,
+      );
+
+      const markProcessedStartedAt = performance.now();
+
       await this.redisService.set(processedKey, 'true', 86400);
+
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'mark_processed' },
+        (performance.now() - markProcessedStartedAt) / 1000,
+      );
+
+      const releaseProcessingLockStartedAt = performance.now();
+
       await this.redisService.del(processingKey);
+
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'release_processing_lock' },
+        (performance.now() - releaseProcessingLockStartedAt) / 1000,
+      );
 
       this.logger.log({
         event: 'order_notification_processed',
@@ -288,6 +328,11 @@ export class OrderNotificationConsumer implements OnModuleInit {
       });
 
       channel.ack(message);
+
+      orderNotificationConsumerStepDurationSeconds.observe(
+        { step: 'total' },
+        (performance.now() - handleStartedAt) / 1000,
+      );
     } catch (error) {
       this.logger.error({
         event: 'order_notification_processing_failed',

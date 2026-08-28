@@ -30,3 +30,10 @@ export const orderStepDurationSeconds = new Histogram({
   labelNames: ['step'],
   buckets: [0.001, 0.003, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5],
 });
+
+export const orderNotificationConsumerStepDurationSeconds = new Histogram({
+  name: 'order_notification_consumer_step_duration_seconds',
+  help: 'Order notification consumer processing step duration in seconds',
+  labelNames: ['step'],
+  buckets: [0.001, 0.003, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 2],
+});
