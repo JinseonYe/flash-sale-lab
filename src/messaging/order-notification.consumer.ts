@@ -52,7 +52,7 @@ export class OrderNotificationConsumer implements OnModuleInit {
         },
       });
 
-      await channel.prefetch(50);
+      await channel.prefetch(10);
 
       await channel.consume('order.notification', (message) => {
         if (!message) {
