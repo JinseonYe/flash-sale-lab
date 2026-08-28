@@ -2,6 +2,7 @@ import { OrderService } from './order.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaOrderUnitOfWork } from './transaction/prisma-order-unit-of-work';
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
+import { PrismaInventoryRepository } from './repository/prisma-inventory.repository';
 
 describe('Order concurrency', () => {
   let prisma: PrismaService;
@@ -15,9 +16,14 @@ describe('Order concurrency', () => {
     prisma = new PrismaService();
 
     const orderRepository = new PrismaOrderRepository(prisma);
+    const inventoryRepository = new PrismaInventoryRepository(prisma);
     const unitOfWork = new PrismaOrderUnitOfWork(prisma);
 
-    orderService = new OrderService(orderRepository, unitOfWork);
+    orderService = new OrderService(
+      orderRepository,
+      inventoryRepository,
+      unitOfWork,
+    );
   });
 
   afterAll(async () => {
@@ -35,18 +41,34 @@ describe('Order concurrency', () => {
       where: {
         name: 'Flash Sale Seed Product',
       },
-      include: {
-        inventory: true,
+    });
+
+    await prisma.inventory.update({
+      where: {
+        productId: product.id,
+      },
+      data: {
+        stock: INITIAL_STOCK,
       },
     });
 
-    if (!product.inventory) {
-      throw new Error('Seed product inventory not found');
-    }
+    const initialInventory = await prisma.inventory.findUniqueOrThrow({
+      where: {
+        productId: product.id,
+      },
+    });
 
-    const initialStock = product.inventory.stock;
+    const initialStock = initialInventory.stock;
 
     expect(initialStock).toBe(INITIAL_STOCK);
+
+    const initialOrderCount = await prisma.order.count({
+      where: {
+        productId: product.id,
+      },
+    });
+
+    const startedAt = performance.now();
 
     const orderPromises = Array.from({ length: CONCURRENT_ORDERS }, () =>
       orderService.create(
@@ -58,8 +80,6 @@ describe('Order concurrency', () => {
         'test-request-id',
       ),
     );
-
-    const startedAt = performance.now();
 
     const results = await Promise.allSettled(orderPromises);
 
@@ -73,11 +93,13 @@ describe('Order concurrency', () => {
       (result) => result.status === 'rejected',
     ).length;
 
-    const orderCount = await prisma.order.count({
+    const finalOrderCount = await prisma.order.count({
       where: {
         productId: product.id,
       },
     });
+
+    const createdOrderCount = finalOrderCount - initialOrderCount;
 
     const finalInventory = await prisma.inventory.findUniqueOrThrow({
       where: {
@@ -93,7 +115,7 @@ describe('Order concurrency', () => {
       initialStock,
       successCount,
       failedCount,
-      orderCount,
+      createdOrderCount,
       finalStock,
       expectedStock,
       durationMs,
@@ -102,7 +124,7 @@ describe('Order concurrency', () => {
     expect(successCount).toBe(INITIAL_STOCK);
     expect(failedCount).toBe(CONCURRENT_ORDERS - INITIAL_STOCK);
 
-    expect(orderCount).toBe(successCount);
+    expect(createdOrderCount).toBe(successCount);
 
     expect(finalStock).toBe(expectedStock);
     expect(finalStock).toBe(0);

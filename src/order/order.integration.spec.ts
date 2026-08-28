@@ -1,6 +1,7 @@
 import { OrderService } from './order.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrismaOrderRepository } from './repository/prisma-order.repository';
+import { PrismaInventoryRepository } from './repository/prisma-inventory.repository';
 import { PrismaOrderUnitOfWork } from './transaction/prisma-order-unit-of-work';
 
 describe('OrderService Integration', () => {
@@ -11,9 +12,14 @@ describe('OrderService Integration', () => {
     prisma = new PrismaService();
 
     const orderRepository = new PrismaOrderRepository(prisma);
+    const inventoryRepository = new PrismaInventoryRepository(prisma);
     const unitOfWork = new PrismaOrderUnitOfWork(prisma);
 
-    orderService = new OrderService(orderRepository, unitOfWork);
+    orderService = new OrderService(
+      orderRepository,
+      inventoryRepository,
+      unitOfWork,
+    );
   });
 
   afterAll(async () => {
