@@ -24,7 +24,7 @@ export class PrismaOutboxRepository implements OutboxRepository {
     });
   }
 
-  async findPending(): Promise<PendingOutboxEvent[]> {
+  async findPending(limit: number): Promise<PendingOutboxEvent[]> {
     const events = await this.prisma.outboxEvent.findMany({
       where: {
         status: 'PENDING',
@@ -32,6 +32,7 @@ export class PrismaOutboxRepository implements OutboxRepository {
       orderBy: {
         id: 'asc',
       },
+      take: limit,
     });
 
     return events.map((event) => {

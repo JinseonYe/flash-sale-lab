@@ -37,3 +37,25 @@ export const orderNotificationConsumerStepDurationSeconds = new Histogram({
   labelNames: ['step'],
   buckets: [0.001, 0.003, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 2],
 });
+
+export const outboxPublisherDurationSeconds = new Histogram({
+  name: 'outbox_publisher_duration_seconds',
+  help: 'Outbox publisher cycle duration in seconds',
+  buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30],
+});
+
+export const outboxPublisherEvents = new Histogram({
+  name: 'outbox_publisher_events',
+  help: 'Number of pending outbox events fetched per publisher cycle',
+  buckets: [0, 1, 10, 50, 100, 250, 500, 1000, 2500],
+});
+
+export const outboxPublisherActiveExecutions = new Gauge({
+  name: 'outbox_publisher_active_executions',
+  help: 'Number of currently running outbox publisher cycles',
+});
+
+export const outboxPublisherSkippedTotal = new Counter({
+  name: 'outbox_publisher_skipped_total',
+  help: 'Number of outbox publisher cycles skipped because another cycle was already running',
+});

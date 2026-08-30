@@ -7,11 +7,19 @@ import {
   OUTBOX_REPOSITORY,
   type OutboxRepository,
 } from '../order/repository/outbox.repository';
+import {
+  outboxPublisherActiveExecutions,
+  outboxPublisherDurationSeconds,
+  outboxPublisherEvents,
+  outboxPublisherSkippedTotal,
+} from '../observability/metrics';
 
 @Injectable()
 export class OutboxPublisherService {
   private readonly logger = new Logger(OutboxPublisherService.name);
   private readonly tracer = trace.getTracer('outbox-publisher');
+  private activeExecutions = 0;
+  private readonly batchSize = 500;
 
   constructor(
     @Inject(OUTBOX_REPOSITORY)
@@ -22,40 +30,60 @@ export class OutboxPublisherService {
 
   @Interval(1000)
   async publishPending() {
-    const events = await this.outboxRepository.findPending();
+    if (this.activeExecutions > 0) {
+      outboxPublisherSkippedTotal.inc();
+      return;
+    }
 
-    for (const event of events) {
-      const claimed = await this.outboxRepository.claim(event.id);
+    const startedAt = performance.now();
 
-      if (!claimed) {
-        continue;
+    this.activeExecutions += 1;
+    outboxPublisherActiveExecutions.inc();
+
+    try {
+      const events = await this.outboxRepository.findPending(this.batchSize);
+      outboxPublisherEvents.observe(events.length);
+
+      for (const event of events) {
+        const claimed = await this.outboxRepository.claim(event.id);
+
+        if (!claimed) {
+          continue;
+        }
+
+        if (event.type !== 'ORDER_NOTIFICATION') {
+          continue;
+        }
+
+        const parentContext = propagation.extract(
+          context.active(),
+          event.payload.traceContext,
+        );
+
+        await this.tracer.startActiveSpan(
+          'outbox.publish',
+          {},
+          parentContext,
+          async (span) => {
+            try {
+              await this.rabbitMqService.publishOrderNotification(
+                event.payload.orderId,
+                event.payload.requestId,
+              );
+
+              await this.outboxRepository.markAsSent(event.id);
+            } finally {
+              span.end();
+            }
+          },
+        );
       }
+    } finally {
+      this.activeExecutions -= 1;
+      outboxPublisherActiveExecutions.dec();
 
-      if (event.type !== 'ORDER_NOTIFICATION') {
-        continue;
-      }
-
-      const parentContext = propagation.extract(
-        context.active(),
-        event.payload.traceContext,
-      );
-
-      await this.tracer.startActiveSpan(
-        'outbox.publish',
-        {},
-        parentContext,
-        async (span) => {
-          try {
-            await this.rabbitMqService.publishOrderNotification(
-              event.payload.orderId,
-              event.payload.requestId,
-            );
-
-            await this.outboxRepository.markAsSent(event.id);
-          } finally {
-            span.end();
-          }
-        },
+      outboxPublisherDurationSeconds.observe(
+        (performance.now() - startedAt) / 1000,
       );
     }
   }
