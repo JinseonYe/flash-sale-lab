@@ -1,0 +1,22 @@
+services:
+  api:
+    image: 704887592908.dkr.ecr.ap-northeast-2.amazonaws.com/flash-sale-api:${IMAGE_TAG}
+    container_name: flash-sale-api
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      RABBITMQ_URL: ${RABBITMQ_URL}
+
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: '0.1'
+      OTEL_NODE_ENABLED_INSTRUMENTATIONS: http,nestjs-core,amqplib
+
+    ports:
+      - '3000:3000'
+
+    extra_hosts:
+      - 'postgresql:172.31.8.224'
+      - 'redis:172.31.8.224'
+      - 'rabbitmq:172.31.8.224'
