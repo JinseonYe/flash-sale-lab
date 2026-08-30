@@ -9,6 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    ports:
+      - '172.31.8.224:5432:5432'
     networks:
       - flash-sale-network
     healthcheck:
@@ -21,6 +23,8 @@ services:
     image: redis:8
     container_name: redis
     restart: unless-stopped
+    ports:
+      - '172.31.8.224:6379:6379'
     networks:
       - flash-sale-network
     healthcheck:
@@ -38,6 +42,8 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - '172.31.8.224:5672:5672'
     networks:
       - flash-sale-network
     healthcheck:
