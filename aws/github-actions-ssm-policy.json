@@ -6,7 +6,8 @@
       "Action": "ssm:SendCommand",
       "Resource": [
         "arn:aws:ssm:ap-northeast-2::document/AWS-RunShellScript",
-        "arn:aws:ec2:ap-northeast-2:704887592908:instance/i-04a58cbfc26f8ae75"
+        "arn:aws:ec2:ap-northeast-2:704887592908:instance/i-04a58cbfc26f8ae75",
+        "arn:aws:ec2:ap-northeast-2:704887592908:instance/i-00401c3aad902ca3e"
       ]
     },
     {

@@ -52,8 +52,8 @@ jobs:
           push: true
           tags: ${{ steps.login-ecr.outputs.registry }}/flash-sale-api:${{ github.sha }}-migrator
 
-      - name: Deploy to EC2 with SSM
-        id: deploy
+      - name: Deploy primary EC2 with SSM
+        id: deploy_primary
         run: |
           DEPLOY_SH_B64=$(base64 -w 0 deploy.sh)
           COMPOSE_B64=$(base64 -w 0 compose.aws.yaml)
@@ -62,6 +62,7 @@ jobs:
             --instance-ids "i-04a58cbfc26f8ae75" \
             --document-name "AWS-RunShellScript" \
             --parameters "commands=[
+              \"mkdir -p /home/ec2-user/flash-sale\",
               \"echo '$DEPLOY_SH_B64' | base64 -d > /home/ec2-user/flash-sale/deploy.sh\",
               \"echo '$COMPOSE_B64' | base64 -d > /home/ec2-user/flash-sale/compose.aws.yaml\",
               \"chown ec2-user:ec2-user /home/ec2-user/flash-sale/deploy.sh /home/ec2-user/flash-sale/compose.aws.yaml\",
@@ -77,10 +78,44 @@ jobs:
             --command-id "$COMMAND_ID" \
             --instance-id "i-04a58cbfc26f8ae75"
 
-      - name: Show deployment result
-        if: always() && steps.deploy.outputs.command_id != ''
+      - name: Show primary deployment result
+        if: always() && steps.deploy_primary.outputs.command_id != ''
         run: |
           aws ssm get-command-invocation \
-            --command-id "${{ steps.deploy.outputs.command_id }}" \
+            --command-id "${{ steps.deploy_primary.outputs.command_id }}" \
             --instance-id "i-04a58cbfc26f8ae75" \
+            --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}'
+
+      - name: Deploy secondary EC2 with SSM
+        id: deploy_secondary
+        run: |
+          DEPLOY_API_SH_B64=$(base64 -w 0 deploy-api.sh)
+          COMPOSE_API_B64=$(base64 -w 0 compose.aws.api.yaml)
+
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "i-00401c3aad902ca3e" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "commands=[
+              \"mkdir -p /home/ec2-user/flash-sale\",
+              \"echo '$DEPLOY_API_SH_B64' | base64 -d > /home/ec2-user/flash-sale/deploy-api.sh\",
+              \"echo '$COMPOSE_API_B64' | base64 -d > /home/ec2-user/flash-sale/compose.aws.api.yaml\",
+              \"chown ec2-user:ec2-user /home/ec2-user/flash-sale/deploy-api.sh /home/ec2-user/flash-sale/compose.aws.api.yaml\",
+              \"chmod +x /home/ec2-user/flash-sale/deploy-api.sh\",
+              \"sudo -u ec2-user -H bash -lc 'cd /home/ec2-user/flash-sale && IMAGE_TAG=${{ github.sha }} ./deploy-api.sh'\"
+            ]" \
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "i-00401c3aad902ca3e"
+
+      - name: Show secondary deployment result
+        if: always() && steps.deploy_secondary.outputs.command_id != ''
+        run: |
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.deploy_secondary.outputs.command_id }}" \
+            --instance-id "i-00401c3aad902ca3e" \
             --query '{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}'
