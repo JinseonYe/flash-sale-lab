@@ -77,5 +77,6 @@ model OutboxEvent {
   processingStartedAt DateTime?    @map("processing_started_at")
   sentAt              DateTime?    @map("sent_at")
 
+  @@index([status, id], map: "idx_outbox_events_status_id")
   @@map("outbox_events")
 }
