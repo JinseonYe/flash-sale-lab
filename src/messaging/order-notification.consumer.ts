@@ -52,6 +52,15 @@ export class OrderNotificationConsumer implements OnModuleInit {
         },
       });
 
+      await channel.assertQueue('order.notification.processing-retry', {
+        durable: true,
+        arguments: {
+          'x-message-ttl': 35000,
+          'x-dead-letter-exchange': '',
+          'x-dead-letter-routing-key': 'order.notification',
+        },
+      });
+
       await channel.prefetch(100);
 
       await channel.consume('order.notification', (message) => {
@@ -273,13 +282,43 @@ export class OrderNotificationConsumer implements OnModuleInit {
     }
 
     if (!acquired) {
-      this.logger.log({
-        event: 'order_notification_processing_not_acquired',
-        requestId: data.requestId,
-        orderId: data.orderId,
-      });
+      try {
+        channel.sendToQueue(
+          'order.notification.processing-retry',
+          message.content,
+          {
+            persistent: true,
+            headers: {
+              ...message.properties.headers,
+            },
+          },
+        );
 
-      channel.ack(message);
+        await channel.waitForConfirms();
+
+        this.logger.log({
+          event: 'order_notification_processing_retry_scheduled',
+          requestId: data.requestId,
+          orderId: data.orderId,
+        });
+
+        channel.ack(message);
+      } catch (error) {
+        this.logger.error({
+          event: 'order_notification_processing_retry_publish_failed',
+          requestId: data.requestId,
+          orderId: data.orderId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+
+        try {
+          channel.nack(message, false, true);
+        } catch {
+          // processing-retry Queue로 안전하게 넘기지 못했다면
+          // 원본 메시지를 RabbitMQ가 다시 전달할 수 있도록 한다.
+        }
+      }
+
       return;
     }
 
