@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BeforeApplicationShutdown,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 import { RedisService } from '../redis/redis.service';
@@ -6,7 +11,9 @@ import { performance } from 'node:perf_hooks';
 import { orderNotificationConsumerStepDurationSeconds } from '../observability/metrics';
 
 @Injectable()
-export class OrderNotificationConsumer implements OnModuleInit {
+export class OrderNotificationConsumer
+  implements OnModuleInit, BeforeApplicationShutdown
+{
   private readonly logger = new Logger(OrderNotificationConsumer.name);
 
   constructor(private readonly redisService: RedisService) {}
@@ -17,12 +24,16 @@ export class OrderNotificationConsumer implements OnModuleInit {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private connecting = false;
 
+  private shuttingDown = false;
+  private consumerTag?: string;
+  private readonly inFlightHandlers = new Set<Promise<void>>();
+
   onModuleInit() {
     void this.connect();
   }
 
   private async connect() {
-    if (this.connecting || this.channel) {
+    if (this.shuttingDown || this.connecting || this.channel) {
       return;
     }
 
@@ -63,13 +74,27 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
       await channel.prefetch(100);
 
-      await channel.consume('order.notification', (message) => {
-        if (!message) {
-          return;
-        }
+      const consumeResult = await channel.consume(
+        'order.notification',
+        (message) => {
+          if (!message) {
+            return;
+          }
 
-        void this.handleMessage(channel, message);
-      });
+          const task = this.handleMessage(channel, message).catch((error) => {
+            this.logger.error({
+              event: 'order_notification_consumer_unhandled_error',
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
+
+          this.inFlightHandlers.add(task);
+
+          void task.finally(() => {
+            this.inFlightHandlers.delete(task);
+          });
+        },
+      );
 
       channel.on('error', (error) => {
         this.logger.error({
@@ -85,11 +110,10 @@ export class OrderNotificationConsumer implements OnModuleInit {
 
         if (this.channel === channel) {
           this.channel = undefined;
+          this.consumerTag = undefined;
         }
 
-        // channel만 죽고 connection은 살아 있는 경우,
-        // 기존 connection도 정리해서 전체 연결을 새로 만들도록 한다.
-        if (this.connection === connection) {
+        if (!this.shuttingDown && this.connection === connection) {
           void connection.close().catch(() => {
             // 이미 connection이 닫힌 상태라면 무시
           });
@@ -111,12 +135,17 @@ export class OrderNotificationConsumer implements OnModuleInit {
         if (this.connection === connection) {
           this.connection = undefined;
           this.channel = undefined;
-          this.scheduleReconnect();
+          this.consumerTag = undefined;
+
+          if (!this.shuttingDown) {
+            this.scheduleReconnect();
+          }
         }
       });
 
       this.connection = connection;
       this.channel = channel;
+      this.consumerTag = consumeResult.consumerTag;
 
       this.logger.log({
         event: 'order_notification_consumer_connected',
@@ -127,19 +156,22 @@ export class OrderNotificationConsumer implements OnModuleInit {
         error: error instanceof Error ? error.message : String(error),
       });
 
-      this.scheduleReconnect();
+      if (!this.shuttingDown) {
+        this.scheduleReconnect();
+      }
     } finally {
       this.connecting = false;
     }
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) {
+    if (this.shuttingDown || this.reconnectTimer) {
       return;
     }
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
+
       void this.connect();
     }, 3000);
   }
@@ -475,5 +507,75 @@ export class OrderNotificationConsumer implements OnModuleInit {
       errorName: 'UnknownError',
       errorMessage: String(error),
     };
+  }
+
+  async beforeApplicationShutdown() {
+    this.shuttingDown = true;
+
+    this.logger.log({
+      event: 'order_notification_consumer_shutdown_started',
+      inFlight: this.inFlightHandlers.size,
+    });
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
+    const channel = this.channel;
+    const connection = this.connection;
+    const consumerTag = this.consumerTag;
+
+    if (channel && consumerTag) {
+      try {
+        await channel.cancel(consumerTag);
+
+        this.logger.log({
+          event: 'order_notification_consumer_cancelled',
+        });
+      } catch (error) {
+        this.logger.error({
+          event: 'order_notification_consumer_cancel_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (this.inFlightHandlers.size > 0) {
+      this.logger.log({
+        event: 'order_notification_consumer_draining',
+        inFlight: this.inFlightHandlers.size,
+      });
+
+      await Promise.all([...this.inFlightHandlers]);
+    }
+
+    this.logger.log({
+      event: 'order_notification_consumer_drained',
+    });
+
+    this.consumerTag = undefined;
+    this.channel = undefined;
+    this.connection = undefined;
+
+    if (channel) {
+      try {
+        await channel.close();
+      } catch {
+        // 이미 닫혀 있다면 무시
+      }
+    }
+
+    if (connection) {
+      try {
+        await connection.close();
+      } catch {
+        // 이미 닫혀 있다면 무시
+      }
+    }
+
+    this.logger.log({
+      event: 'order_notification_consumer_shutdown_completed',
+    });
   }
 }

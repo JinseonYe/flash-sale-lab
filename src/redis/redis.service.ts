@@ -1,14 +1,14 @@
 import {
   Injectable,
   Logger,
-  OnModuleDestroy,
+  OnApplicationShutdown,
   OnModuleInit,
 } from '@nestjs/common';
 import { createClient } from 'redis';
 import { redisOperationFailuresTotal } from '../observability/metrics';
 
 @Injectable()
-export class RedisService implements OnModuleInit, OnModuleDestroy {
+export class RedisService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(RedisService.name);
 
   private readonly client = createClient({
@@ -70,7 +70,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async onModuleDestroy() {
+  async onApplicationShutdown() {
+    if (!this.client.isOpen) {
+      return;
+    }
+
     await this.client.quit();
   }
 

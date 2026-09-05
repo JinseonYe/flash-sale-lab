@@ -1,4 +1,4 @@
-import type { ConfirmChannel, ConsumeMessage } from 'amqplib';
+import type { ChannelModel, ConfirmChannel, ConsumeMessage } from 'amqplib';
 
 import { OrderNotificationConsumer } from './order-notification.consumer';
 import { RedisService } from '../redis/redis.service';
@@ -8,6 +8,13 @@ type TestableOrderNotificationConsumer = {
     channel: ConfirmChannel,
     message: ConsumeMessage,
   ): Promise<void>;
+
+  beforeApplicationShutdown(): Promise<void>;
+
+  connection?: ChannelModel;
+  channel?: ConfirmChannel;
+  consumerTag?: string;
+  inFlightHandlers: Set<Promise<void>>;
 };
 
 describe('OrderNotificationConsumer', () => {
@@ -25,6 +32,12 @@ describe('OrderNotificationConsumer', () => {
     waitForConfirms: jest.Mock;
     ack: jest.Mock;
     nack: jest.Mock;
+    cancel: jest.Mock;
+    close: jest.Mock;
+  };
+
+  let connection: {
+    close: jest.Mock;
   };
 
   let message: ConsumeMessage;
@@ -42,6 +55,12 @@ describe('OrderNotificationConsumer', () => {
       waitForConfirms: jest.fn().mockResolvedValue(undefined),
       ack: jest.fn(),
       nack: jest.fn(),
+      cancel: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+
+    connection = {
+      close: jest.fn().mockResolvedValue(undefined),
     };
 
     message = {
@@ -137,5 +156,44 @@ describe('OrderNotificationConsumer', () => {
 
     expect(redisService.set).not.toHaveBeenCalled();
     expect(redisService.del).not.toHaveBeenCalled();
+  });
+
+  it('shutdown 시 신규 메시지 소비를 중단하고 in-flight 작업 완료 후 RabbitMQ 연결을 닫는다', async () => {
+    let resolveInFlight!: () => void;
+
+    const inFlightTask = new Promise<void>((resolve) => {
+      resolveInFlight = resolve;
+    });
+
+    consumer.channel = channel as unknown as ConfirmChannel;
+    consumer.connection = connection as unknown as ChannelModel;
+    consumer.consumerTag = 'test-consumer-tag';
+    consumer.inFlightHandlers.add(inFlightTask);
+
+    const shutdownPromise = consumer.beforeApplicationShutdown();
+
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+
+    expect(channel.cancel).toHaveBeenCalledWith('test-consumer-tag');
+
+    expect(channel.close).not.toHaveBeenCalled();
+    expect(connection.close).not.toHaveBeenCalled();
+
+    resolveInFlight();
+
+    await shutdownPromise;
+
+    expect(channel.close).toHaveBeenCalledTimes(1);
+    expect(connection.close).toHaveBeenCalledTimes(1);
+
+    const cancelCallOrder = channel.cancel.mock.invocationCallOrder[0];
+    const channelCloseCallOrder = channel.close.mock.invocationCallOrder[0];
+    const connectionCloseCallOrder =
+      connection.close.mock.invocationCallOrder[0];
+
+    expect(cancelCallOrder).toBeLessThan(channelCloseCallOrder);
+    expect(channelCloseCallOrder).toBeLessThan(connectionCloseCallOrder);
   });
 });

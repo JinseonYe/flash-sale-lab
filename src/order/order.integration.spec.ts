@@ -23,7 +23,7 @@ describe('OrderService Integration', () => {
   });
 
   afterAll(async () => {
-    await prisma.onModuleDestroy();
+    await prisma.$disconnect();
   });
 
   it('실제 DB에서 주문 생성 시 재고가 감소하고 주문이 저장되어야 한다', async () => {

@@ -71,7 +71,7 @@ async function main() {
       product,
     });
   } finally {
-    await prisma.onModuleDestroy();
+    await prisma.$disconnect();
   }
 }
 

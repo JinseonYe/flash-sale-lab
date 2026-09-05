@@ -1,9 +1,14 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationShutdown,
+  OnModuleInit,
+} from '@nestjs/common';
 import * as amqp from 'amqplib';
 import type { ChannelModel, ConfirmChannel } from 'amqplib';
 
 @Injectable()
-export class RabbitMqService implements OnModuleInit {
+export class RabbitMqService implements OnModuleInit, OnApplicationShutdown {
   private readonly logger = new Logger(RabbitMqService.name);
 
   private connection?: ChannelModel;
@@ -11,13 +16,14 @@ export class RabbitMqService implements OnModuleInit {
 
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private connecting = false;
+  private shuttingDown = false;
 
   async onModuleInit() {
     await this.connect();
   }
 
   private async connect() {
-    if (this.connecting || this.channel) {
+    if (this.shuttingDown || this.connecting || this.channel) {
       return;
     }
 
@@ -63,7 +69,9 @@ export class RabbitMqService implements OnModuleInit {
         this.connection = undefined;
         this.channel = undefined;
 
-        this.scheduleReconnect();
+        if (!this.shuttingDown) {
+          this.scheduleReconnect();
+        }
       });
 
       this.connection = connection;
@@ -86,7 +94,7 @@ export class RabbitMqService implements OnModuleInit {
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimer) {
+    if (this.shuttingDown || this.reconnectTimer) {
       return;
     }
 
@@ -119,5 +127,36 @@ export class RabbitMqService implements OnModuleInit {
 
   isAvailable(): boolean {
     return this.connection !== undefined && this.channel !== undefined;
+  }
+
+  async onApplicationShutdown() {
+    this.shuttingDown = true;
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
+    const channel = this.channel;
+    const connection = this.connection;
+
+    this.channel = undefined;
+    this.connection = undefined;
+
+    if (channel) {
+      try {
+        await channel.close();
+      } catch {
+        // 이미 닫혀 있다면 무시
+      }
+    }
+
+    if (connection) {
+      try {
+        await connection.close();
+      } catch {
+        // 이미 닫혀 있다면 무시
+      }
+    }
   }
 }
