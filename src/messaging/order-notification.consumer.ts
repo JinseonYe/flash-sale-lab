@@ -28,6 +28,8 @@ export class OrderNotificationConsumer
   private consumerTag?: string;
   private readonly inFlightHandlers = new Set<Promise<void>>();
 
+  private readonly maxProcessingRetries = 3;
+
   onModuleInit() {
     void this.connect();
   }
@@ -314,6 +316,51 @@ export class OrderNotificationConsumer
     }
 
     if (!acquired) {
+      const processingRetryCount = Number(
+        message.properties.headers?.['processing-retry-count'] ?? 0,
+      );
+
+      if (processingRetryCount >= this.maxProcessingRetries) {
+        try {
+          channel.sendToQueue('order.notification.dlq', message.content, {
+            persistent: true,
+            headers: {
+              ...message.properties.headers,
+              'processing-retry-count': processingRetryCount,
+              'dlq-reason': 'processing-lock-exhausted',
+            },
+          });
+
+          await channel.waitForConfirms();
+
+          this.logger.warn({
+            event: 'order_notification_processing_retry_exhausted',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            processingRetryCount,
+          });
+
+          channel.ack(message);
+        } catch (error) {
+          this.logger.error({
+            event: 'order_notification_processing_retry_dlq_publish_failed',
+            requestId: data.requestId,
+            orderId: data.orderId,
+            processingRetryCount,
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          try {
+            channel.nack(message, false, true);
+          } catch {
+            // DLQ로 안전하게 넘기지 못했다면
+            // RabbitMQ가 원본 메시지를 다시 전달할 수 있도록 한다.
+          }
+        }
+
+        return;
+      }
+
       try {
         channel.sendToQueue(
           'order.notification.processing-retry',
@@ -322,6 +369,7 @@ export class OrderNotificationConsumer
             persistent: true,
             headers: {
               ...message.properties.headers,
+              'processing-retry-count': processingRetryCount + 1,
             },
           },
         );
@@ -332,6 +380,7 @@ export class OrderNotificationConsumer
           event: 'order_notification_processing_retry_scheduled',
           requestId: data.requestId,
           orderId: data.orderId,
+          processingRetryCount: processingRetryCount + 1,
         });
 
         channel.ack(message);
@@ -340,6 +389,7 @@ export class OrderNotificationConsumer
           event: 'order_notification_processing_retry_publish_failed',
           requestId: data.requestId,
           orderId: data.orderId,
+          processingRetryCount,
           error: error instanceof Error ? error.message : String(error),
         });
 
