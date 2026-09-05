@@ -27,7 +27,7 @@ describe('Order concurrency', () => {
   });
 
   afterAll(async () => {
-    await prisma.onModuleDestroy();
+    await prisma.$disconnect();
   });
 
   it('동시 주문 시 재고 정합성을 보장한다', async () => {
