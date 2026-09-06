@@ -1,98 +1,128 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Flash Sale Lab
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Flash Sale 환경을 가정해 **동시성, 비동기 메시징, 장애 복구, Scale-out, Observability, CI/CD**를 직접 재현하고 검증한 백엔드 프로젝트입니다.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+기술을 먼저 추가하기보다 **문제 재현 → 원인 분석 → 필요한 기술 도입 → Before/After 검증** 순서로 시스템을 발전시켰습니다.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Architecture
 
-## Project setup
+```mermaid
+flowchart LR
+    Client["Client / k6"] --> ALB["AWS ALB"]
 
-```bash
-$ pnpm install
+    ALB --> API1["EC2 #1<br/>NestJS API"]
+    ALB --> API2["EC2 #2<br/>NestJS API"]
+
+    API1 --> PG[("PostgreSQL")]
+    API1 --> Redis[("Redis")]
+    API1 --> MQ["RabbitMQ"]
+
+    API2 --> PG
+    API2 --> Redis
+    API2 --> MQ
 ```
 
-## Compile and run the project
+두 NestJS API 인스턴스를 ALB 뒤에 배치하고 Stateless하게 운영했습니다.
 
-```bash
-# development
-$ pnpm run start
+PostgreSQL, Redis, RabbitMQ는 Primary EC2의 Shared State로 사용해 Multi-API 환경에서 주문 정합성, Consumer 멱등성, 메시지 분산 처리를 검증했습니다.
 
-# watch mode
-$ pnpm run start:dev
+---
 
-# production mode
-$ pnpm run start:prod
+## Key Results
+
+| 항목            | 결과                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| 주문 정합성     | 재고 100 / 동시 주문 150 → **100 성공 / 50 실패 / 재고 0**          |
+| GET 성능 개선   | RPS **1,222.90 → 2,186.68**, p95 **135.18ms → 74.88ms**             |
+| AWS Scale-out   | 1 API → 2 API에서 RPS **2,235.46 → 3,734.40 (+67.1%)**              |
+| Consumer 멱등성 | 동일 orderId 10건 동시 발행 → **실제 알림 1회**                     |
+| Consumer Crash  | 처리 중 crash에서 메시지 유실 발견 → **processing-retry 기반 복구** |
+| Retry Hardening | 35초 간격 무한 순환 재현 → **최대 3회 후 DLQ 격리**                 |
+
+---
+
+## Key Engineering Challenges
+
+### 동시 주문 정합성
+
+동시에 여러 주문이 같은 재고를 차감할 때 발생할 수 있는 초과 판매 문제를 재현하고 Transaction과 조건부 재고 차감을 적용했습니다.
+
+AWS Multi-EC2 환경에서도 재고 100개에 150건을 동시에 요청해 **100건 성공 / 50건 충돌 / 최종 재고 0**을 확인했습니다.
+
+### RabbitMQ / Outbox / Consumer 멱등성
+
+주문 후처리를 RabbitMQ 기반으로 비동기화하고 Outbox Pattern을 적용했습니다.
+
+Redis 기반 처리 상태를 이용해 Consumer 멱등성을 보장하고, Consumer crash 과정에서 발견한 메시지 유실 문제를 `processing-retry` Queue를 통해 복구했습니다.
+
+### AWS Scale-out & Bottleneck Analysis
+
+AWS에서 API를 1대에서 2대로 확장하고 ALB로 요청을 분산했습니다.
+
+100 VUs 기준 RPS는 **2,235.46 → 3,734.40(+67.1%)**로 증가했습니다.
+
+200 VUs에서는 처리량 증가폭이 둔화됐고 PostgreSQL/Redis보다 API CPU가 높게 사용되어, Scale-out 이후 새로운 병목이 API 계층으로 이동했음을 확인했습니다.
+
+### Production Hardening
+
+SIGTERM 시 진행 중인 Consumer 메시지와 HTTP 요청이 중단되는 문제를 재현하고 Graceful Shutdown을 적용했습니다.
+
+또한 영구 processing lock 상황에서 메시지가 약 35초마다 무한 순환하는 것을 확인해 **최대 3회 재시도 후 DLQ로 격리**하도록 개선했습니다.
+
+---
+
+## Tech Stack
+
+**Backend**
+NestJS · TypeScript · Prisma · PostgreSQL
+
+**Cache / Messaging**
+Redis · RabbitMQ
+
+**Infrastructure**
+Docker · Nginx · AWS EC2 · ALB · ECR · IAM/OIDC · SSM · Parameter Store
+
+**Observability**
+Prometheus · Grafana · OpenTelemetry · Tempo · Loki
+
+**Testing / Automation**
+Jest · k6 · GitHub Actions
+
+---
+
+## CI/CD
+
+```text
+Pull Request
+→ lint / test / typecheck / build
+→ main merge
+→ GitHub Actions
+→ OIDC로 AWS 인증
+→ Docker image build
+→ ECR push
+→ SSM을 통한 EC2 배포
 ```
 
-## Run tests
+---
+
+## Running Locally
 
 ```bash
-# unit tests
-$ pnpm run test
+pnpm install
+pnpm exec prisma generate
 
-# e2e tests
-$ pnpm run test:e2e
+docker compose up -d
 
-# test coverage
-$ pnpm run test:cov
+pnpm start:dev
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+검증:
 
 ```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
+pnpm lint
+pnpm test
+pnpm exec tsc --noEmit
+pnpm build
 ```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
